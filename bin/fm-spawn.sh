@@ -33,7 +33,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|grok)
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|grok|kimi)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters.
@@ -76,6 +76,10 @@
 # Per-harness turn-end hooks are installed automatically; some live outside the worktree.
 # grok uses a firstmate-owned global hook under ${GROK_HOME:-$HOME/.grok}/hooks
 # plus a gitignored .fm-grok-turnend worktree pointer and a state token.
+# kimi uses a firstmate-owned global Stop hook under ${KIMI_CODE_HOME:-$HOME/.kimi-code}
+# (script + managed [[hooks]] entry in config.toml) plus a gitignored
+# .fm-kimi-turnend worktree pointer and a state token. kimi has no interactive
+# positional prompt, so after launch firstmate injects the brief into the TUI.
 # On success prints: spawned <id> harness=<name> kind=<ship|scout|secondmate> mode=<mode> yolo=<on|off> window=<backend-target> worktree=<path>
 # mode/yolo are resolved per-project from data/projects.md for ship/scout tasks;
 # secondmate spawns record mode=secondmate, yolo=off, home=, and projects=.
@@ -287,7 +291,7 @@ FIRSTMATE_HOME=
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|claude|codex|opencode|pi|grok)
+    ''|claude|codex|opencode|pi|grok|kimi)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -348,6 +352,13 @@ launch_template() {
     # launch command - it is a Stop-event hook installed below (global hook +
     # per-task pointer), so the template is identical for ship/scout/secondmate.
     grok) printf '%s' 'grok --always-approve __MODELFLAG____EFFORTFLAG__"$(cat __BRIEF__)"' ;;
+    # kimi (Kimi Code CLI, binary `kimi`): interactive mode rejects positional
+    # prompts (verified 2026-07-18, 0.26.0). Launch with --yolo for unattended
+    # tool approval; the brief is injected into the TUI after the session is up
+    # (see post-launch block). Effort rides KIMI_MODEL_THINKING_EFFORT when the
+    # value is in the accepted set. Model uses -m with a full alias such as
+    # kimi-code/kimi-for-coding-highspeed.
+    kimi) printf '%s' '__EFFORTFLAG__kimi --yolo __MODELFLAG__' ;;
     *) return 1 ;;
   esac
 }
@@ -435,7 +446,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    claude|codex|opencode|pi|grok)
+    claude|codex|opencode|pi|grok|kimi)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -472,6 +483,16 @@ effort_flag_for_harness() {
       # its --thinking flag.
       case "$effort" in
         low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
+      esac
+      ;;
+    kimi)
+      # kimi has no CLI --effort flag for interactive launch. KIMI_MODEL_THINKING_EFFORT
+      # is the verified env override for the kimi provider (docs + 0.26.0). Managed
+      # models such as k3 advertise support_efforts low|high|max; medium and xhigh
+      # are omitted rather than passed as known-bad values. Emitted as an env
+      # prefix so it lands on the launch line before `kimi`.
+      case "$effort" in
+        low|high|max) printf 'KIMI_MODEL_THINKING_EFFORT=%s ' "$(shell_quote "$effort")" ;;
       esac
       ;;
     # opencode's interactive `opencode --prompt` launch has a verified --model
@@ -967,6 +988,58 @@ EOF
       printf 'token=%s\n' "${auth_file##*/}" > "$WT/.fm-grok-turnend"
       exclude_path '.fm-grok-turnend'
       ;;
+    kimi*)
+      # kimi fires a blockable Stop hook at turn end (verified 2026-07-18, 0.26.0).
+      # Hooks live only in $KIMI_CODE_HOME/config.toml (no project-local hook files),
+      # so firstmate installs one managed Stop entry pointing at a firstmate-owned
+      # global script, guarded by a worktree pointer + registry token (same shape
+      # as grok). Hook cwd is the session project directory (kimi docs).
+      KIMI_HOME_DIR="${KIMI_CODE_HOME:-$HOME/.kimi-code}"
+      KIMI_HOOKS_DIR="$KIMI_HOME_DIR/hooks"
+      KIMI_AUTH_DIR="$KIMI_HOOKS_DIR/fm-turn-end.d"
+      mkdir -p "$KIMI_AUTH_DIR"
+      old_umask=$(umask)
+      umask 077
+      auth_file=$(mktemp "$KIMI_AUTH_DIR/fm.XXXXXXXXXXXX")
+      umask "$old_umask"
+      printf '%s\n' "$TURNEND" > "$auth_file"
+      printf '%s\n' "${auth_file##*/}" > "$STATE/$ID.kimi-turnend-token"
+      sq_kimi_auth_dir=$(shell_quote "$KIMI_AUTH_DIR")
+      cat > "$KIMI_HOOKS_DIR/fm-turn-end.sh" <<EOF
+#!/usr/bin/env bash
+set -u
+auth_dir=$sq_kimi_auth_dir
+p="\$PWD/.fm-kimi-turnend"
+[ -f "\$p" ] || exit 0
+first=
+IFS= read -r -n 256 first < "\$p" 2>/dev/null || [ -n "\$first" ] || exit 0
+case "\$first" in token=*) token=\${first#token=} ;; *) exit 0 ;; esac
+case "\$token" in fm.????????????) : ;; *) exit 0 ;; esac
+case "\$token" in *[!A-Za-z0-9._-]*) exit 0 ;; esac
+t=\$(cat "\$auth_dir/\$token" 2>/dev/null) || exit 0
+case "\$t" in /*.turn-ended) : ;; *) exit 0 ;; esac
+touch "\$t" 2>/dev/null || true
+exit 0
+EOF
+      chmod +x "$KIMI_HOOKS_DIR/fm-turn-end.sh"
+      # Ensure a single managed [[hooks]] Stop entry in config.toml.
+      kimi_cfg="$KIMI_HOME_DIR/config.toml"
+      kimi_hook_cmd="bash $(shell_quote "$KIMI_HOOKS_DIR/fm-turn-end.sh")"
+      if [ -f "$kimi_cfg" ] || mkdir -p "$KIMI_HOME_DIR" 2>/dev/null; then
+        if [ ! -f "$kimi_cfg" ] || ! grep -qF 'firstmate-managed-kimi-turnend' "$kimi_cfg" 2>/dev/null; then
+          {
+            printf '\n# firstmate-managed-kimi-turnend (do not edit by hand; owned by fm-spawn)\n'
+            printf '[[hooks]]\n'
+            printf 'event = "Stop"\n'
+            printf 'matcher = ""\n'
+            printf 'command = %s\n' "$(printf '%s' "$kimi_hook_cmd" | sed 's/"/\\"/g; s/^/"/; s/$/"/')"
+            printf 'timeout = 10\n'
+          } >> "$kimi_cfg"
+        fi
+      fi
+      printf 'token=%s\n' "${auth_file##*/}" > "$WT/.fm-kimi-turnend"
+      exclude_path '.fm-kimi-turnend'
+      ;;
   esac
 fi
 
@@ -1055,5 +1128,28 @@ sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3
 spawn_send_key "$T" Enter
+
+# kimi has no interactive positional prompt (verified 0.26.0). After the TUI is
+# up, inject the brief as the first composer message so ship/scout/secondmate
+# workers start on the task instead of an empty session.
+# FM_KIMI_BRIEF_SETTLE (seconds, default 2.5) is the wait for the idle composer;
+# tests set it to 0 against a fake backend.
+case "$HARNESS" in
+  kimi|kimi*)
+    settle=${FM_KIMI_BRIEF_SETTLE:-2.5}
+    case "$settle" in
+      0|0.0) ;;
+      *) sleep "$settle" ;;
+    esac
+    if [ -f "$BRIEF" ]; then
+      brief_body=$(cat "$BRIEF" 2>/dev/null || true)
+      if [ -n "$brief_body" ]; then
+        spawn_send_literal "$T" "$brief_body"
+        sleep 0.4
+        spawn_send_key "$T" Enter
+      fi
+    fi
+    ;;
+esac
 
 echo "spawned $ID harness=$HARNESS kind=$KIND mode=$MODE yolo=$YOLO window=$META_WINDOW worktree=$WT"

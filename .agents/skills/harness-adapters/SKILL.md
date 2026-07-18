@@ -1,6 +1,6 @@
 ---
 name: harness-adapters
-description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, and grok.
+description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, grok, and kimi.
 user-invocable: false
 metadata:
   internal: true
@@ -51,7 +51,7 @@ Use that value for interrupt, exit, resume, and skill-invocation facts.
 ## Primary turn-end guard
 
 Every verified primary harness has an empirically validated hook path for the "no turn ends blind" guard.
-`claude` and `codex` block directly through Stop hooks that preserve exit status 2 and stderr from `bin/fm-turnend-guard.sh`.
+`claude`, `codex`, and `kimi` block directly through Stop hooks that preserve exit status 2 and stderr from `bin/fm-turnend-guard.sh` (kimi verified 2026-07-18 on 0.26.0: exit 2 forces a continue turn).
 `opencode`, `pi`, and `grok` expose passive lifecycle callbacks for this purpose, so their tracked primary adapters force one bounded follow-up or resume when the shared predicate blocks.
 The exact hook files, commands, validation transcripts, scoping rules, and fail-open tradeoffs are owned by `docs/turnend-guard.md`.
 When changing any primary turn-end hook, validate the real harness behavior in a scratch project or throwaway home before trusting it, then update that doc and the relevant concise fact below.
@@ -75,12 +75,13 @@ Full mechanics, scoping, dated commands, payloads, and fail-open evidence live i
 - `opencode`: verified on 1.17.18; `session.created` plus `client.session.promptAsync` starts the nudge turn in the TUI, while `opencode run` remains fail-open headless.
 - `pi`: verified native `session_start`; the existing primary extension handles `startup`, `new`, and `resume` and uses `pi.sendMessage` to inject context without racing a positional launch prompt.
 - `grok`: the 0.2.103 project `SessionStart` event fires with `source=new`, but stdout does not reach model context; the tracked project hook remains fail-open, and a global token-guarded fallback requires a captain decision.
+- `kimi`: SessionStart is observation-only (docs, kimi-code 0.26.0); hook return text is not injected into model context. Session-start nudge is therefore fail-open: the captain (or first message) must still run `bin/fm-session-start.sh` when opening a kimi primary.
 
 ## Primary watcher supervision
 
 At session start, `bin/fm-session-start.sh` prints exactly one watcher supervision block for the detected primary harness.
 Do not substitute another harness's wait shape when resuming supervision.
-Claude and Grok use tracked background-notify cycles around `bin/fm-watch-arm.sh`.
+Claude, Grok, and Kimi use tracked background-notify cycles around `bin/fm-watch-arm.sh`.
 Codex uses bounded foreground checkpoints through `bin/fm-watch-checkpoint.sh` because Codex cannot reason while a foreground tool call is running.
 OpenCode uses `.opencode/plugins/fm-primary-watch-arm.js`, which coordinates with the turn-end guard plugin and wakes the TUI with `client.session.promptAsync`.
 Pi uses the tracked `.pi/extensions/fm-primary-turnend-guard.ts` plus the tracked `.pi/extensions/fm-primary-pi-watch.ts`, both project-local extensions Pi auto-discovers once trusted.
@@ -108,6 +109,7 @@ The supported launch-profile flags below are verified locally; each row records 
 | grok | `--model <model>` | `--reasoning-effort <low\|medium\|high>` | Verified on grok 0.2.99 (2026-07-13). `--effort` is an alias, but firstmate's profile axis is reasoning effort. As of 0.2.99 the ceiling is `high`; both `xhigh` and `max` are rejected with `use one of: high, medium, low`, so firstmate omits them. |
 | pi | `--model <model>` | `--thinking <low\|medium\|high\|xhigh\|max>` | Verified 2026-07-13 on Pi 0.80.6. `pi --help` advertises `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`; `pi --print --model openai-codex/gpt-5.6-sol --thinking max 'Reply with exactly OK.'` completed successfully. |
 | opencode | `--model <provider/model>` | none for firstmate's interactive launch | Verified on opencode 1.17.6. `opencode run` has `--variant`, but firstmate launches the interactive `opencode --prompt` path, which has no verified effort flag. |
+| kimi | `--model <alias>` (full alias, e.g. `kimi-code/kimi-for-coding-highspeed`) | env `KIMI_MODEL_THINKING_EFFORT=<low\|high\|max>` as a launch prefix | Verified on kimi-code 0.26.0 (2026-07-18). Interactive mode rejects positional prompts; brief is injected after TUI ready. Short model names without the provider prefix fail config validation. Managed k3 advertises `support_efforts` low/high/max; medium and xhigh are omitted. |
 
 When a requested effort value is outside the harness-specific accepted set, `fm-spawn` records the requested `effort=` in meta but emits no effort flag for that harness.
 This preserves launch success instead of passing a known-bad value.
@@ -122,6 +124,7 @@ Natural language is acceptable if uncertain.
 - opencode: no separate verified skill invocation beyond normal slash-command behavior; use natural language if the exact skill command is uncertain.
 - pi: no separate verified skill invocation beyond normal command behavior; use natural language if the exact skill command is uncertain.
 - grok: `/<skill>`, for example `/no-mistakes` (same form as claude). Verified end to end: grok discovers the user-level `no-mistakes` skill, `/no-mistakes` invokes it, and grok drives a real `no-mistakes axi run`. Like codex's `$`/`/` popups, typing `/<skill>` opens grok's slash-autocomplete, so a too-fast Enter selects the popup entry instead of sending, and for an argument-taking command (like `/no-mistakes`'s optional task-first argument) that first Enter only expands the popup selection into an argument-hint placeholder rather than submitting - a genuine second Enter is required (see the grok section below for the 2026-07-03 incident and fix). `fm_tmux_submit_core`'s retried Enter (used by `fm-send` on the tmux backend) already handles this correctly by reading the cursor row; the herdr backend needed a dedicated fix (`fm_backend_herdr_composer_state`, docs/herdr-backend.md) because its prior delta-based verification false-positived on that same popup-close content change.
+- kimi: `/skill:<name>` for external skills, or `/<name>` when the name does not collide with a built-in slash command (kimi-code docs, 0.26.0). Natural language is acceptable if the exact skill command is uncertain. Typing `/` opens slash completion; too-fast Enter can select a popup entry - `fm-send`'s retried Enter is the safety net.
 
 ## claude (VERIFIED)
 
@@ -287,3 +290,43 @@ The adapter therefore runs the shared predicate and, when it returns 2, forces o
 It does not pass `--permission-mode`, so the passive hook cannot escalate the primary session's tool permissions.
 Project-local Grok hooks require folder trust, verified with launch-time `--trust`; if the primary firstmate checkout is not trusted for Grok hooks, this primary guard fails open and `fm-guard.sh` remains the next-command alarm.
 Grok's primary watcher protocol is Claude-shaped background-notify around `bin/fm-watch-arm.sh`; the passive Stop hook is only a backstop for blind turn ends.
+
+## kimi (VERIFIED 2026-07-18, kimi-code 0.26.0)
+
+Kimi Code CLI (binary `kimi`, process may show as `kimi` or `kimi-code`), from Moonshot.
+Install path on this machine: `~/.kimi-code/bin/kimi`.
+Docs: https://moonshotai.github.io/kimi-code/
+
+Launch: `kimi --yolo` (optional `--model <full-alias>`).
+Interactive mode **rejects positional prompts** (`Unexpected argument` / no positionals).
+`fm-spawn` therefore launches the TUI first, waits briefly for the idle composer, then injects the brief via the backend send path and submits it.
+`--yolo` and `--auto` cannot combine with `-p`; non-interactive `-p` uses auto permission by default.
+Crewmate autonomy uses `--yolo` so tool calls skip approval panels.
+
+| Fact | Value |
+|---|---|
+| Busy-pane signature | `thinking...` (braille spinner + "thinking..."), moon-phase glyphs `🌑`..`🌘` with a tip line while working, and/or `Running a command` during a live Bash tool call. Idle has none of these. Do **not** match bare `thinking` - the status bar always shows the model capability word `thinking`. |
+| Exit command | `/exit` (aliases `/quit`, `/q`). Also double `Ctrl-C` or `Ctrl-D` on empty composer with confirmation. |
+| Interrupt | single Escape (or `Ctrl-C` during streaming). Shows `Interrupted by user`. |
+| Skill invocation | `/skill:<name>` or `/<name>` when unambiguous; slash popup needs settle like other harnesses. |
+| Autonomy | `--yolo` (footer shows `yolo`); skips regular tool approvals. `--auto` is the milder auto-permission mode. |
+| Env marker | none distinctive for children (verified: tool-child env inherits the parent shell only). Detection is process ancestry matching `*kimi*`. |
+| Resume | `kimi --session <id>` / `-S <id>`, or `kimi -c` / `--continue` for the most recent session in the cwd. Session id is printed in the welcome banner and on prompt-mode exit. |
+| Composer | bordered box with `>` prompt glyph. Classifies as empty agent composer when bordered (shared `fm_composer_classify_content` already treats bordered `>` as empty). |
+| Model flag | `--model` / `-m` requires a configured full alias such as `kimi-code/kimi-for-coding-highspeed`. Short names fail. |
+| Effort | no interactive CLI effort flag; firstmate prefixes `KIMI_MODEL_THINKING_EFFORT=low\|high\|max` when requested. |
+
+No trust dialog was observed on first launch inside a git worktree (verified).
+Footer shows `yolo` when launched with `--yolo`.
+
+Turn-end hook: kimi fires a blockable `Stop` hook at turn end (stdin JSON includes `cwd`; hook process cwd is the session project directory).
+Hooks are configured only in `$KIMI_CODE_HOME/config.toml` as `[[hooks]]` entries (no project-local hook directory).
+`fm-spawn` installs one managed Stop entry (marker comment `firstmate-managed-kimi-turnend`) pointing at `$KIMI_CODE_HOME/hooks/fm-turn-end.sh`, plus a registry under `hooks/fm-turn-end.d/` and a gitignored worktree pointer `.fm-kimi-turnend`.
+The global script is a no-op unless that pointer's token matches the registry (same safety shape as grok).
+`fm-teardown` removes the pointer and registry token.
+
+**Primary-session facts (verified 2026-07-18, 0.26.0).**
+Stop exit 2 forces the model to continue (live-probed: first Stop blocked with a continue instruction, model emitted the follow-up text).
+Primary watcher protocol is Claude-shaped background-notify around `bin/fm-watch-arm.sh` (`docs/supervision-protocols/kimi.md`).
+SessionStart is observation-only, so the session-start nudge cannot be injected via hook stdout; opening a kimi primary still requires running `bin/fm-session-start.sh` once (fail-open relative to Claude/Codex native injection).
+Primary PreToolUse and Stop guards for the firstmate checkout can share the same managed `[[hooks]]` mechanism in the captain's `config.toml`; until those primary-specific entries are installed, the background watcher remains the normal supervision path and `fm-guard.sh` remains the next-command alarm for blind turn ends.

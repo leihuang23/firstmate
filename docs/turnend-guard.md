@@ -47,10 +47,13 @@ All verified primary harnesses have a tracked integration:
 - `grok`: `.grok/hooks/fm-primary-turnend-guard.json` registers a `Stop` hook that invokes `bin/fm-turnend-guard-grok.sh`.
   The adapter runs the shared guard and, when it returns 2, invokes `grok --resume <sessionId> -p <guard-reason>` with `GROK_TURNEND_GUARD_ACTIVE=1`.
   It does not pass `--permission-mode`, so the passive Stop hook cannot grant stronger tool permissions than Grok's resumed-session default.
+- `kimi`: crewmate turn-end uses a managed `[[hooks]]` Stop entry in `$KIMI_CODE_HOME/config.toml` plus a gitignored worktree pointer (installed by `fm-spawn`, same token-registry shape as grok).
+  Kimi Stop hooks are blockable: exit 2 forces a continue turn (verified 2026-07-18 on kimi-code 0.26.0).
+  Primary turn-end can share that blocking Stop contract when a primary-scoped hook is installed; until then the background watcher remains the normal path and `fm-guard.sh` remains the next-command alarm.
 
-Claude and Codex support a direct blocking Stop hook.
+Claude, Codex, and Kimi support a direct blocking Stop hook.
 For those harnesses, exit status 2 plus stderr from `bin/fm-turnend-guard.sh` blocks the stop and feeds the reason back into the model.
-Both payloads include `stop_hook_active`; when it is true, the shared guard exits 0 so the harness can end after one forced continuation.
+Claude and Codex payloads include `stop_hook_active`; when it is true, the shared guard exits 0 so the harness can end after one forced continuation.
 
 OpenCode, Pi, and Grok expose passive lifecycle callbacks for this purpose.
 Their adapters fail open at the hook boundary to avoid corrupting a user session, but they force one follow-up turn when the shared predicate blocks.

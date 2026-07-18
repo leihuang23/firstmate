@@ -115,7 +115,11 @@ SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trai
 # grok: "Ctrl+c:cancel" (the mid-turn cancel hint in grok's keybind bar, shown iff a
 # turn is running; absent when idle - verified grok 0.2.73, ASCII to avoid the
 # locale fragility of matching grok's braille spinner glyph directly).
-BUSY_REGEX=${FM_BUSY_REGEX:-'esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'}
+# kimi: "thinking..." spinner line and/or moon-phase glyph while working, or
+# "Running a command" during a live Bash tool call (verified 2026-07-18 on
+# kimi-code 0.26.0). Do not match bare "thinking" - the status bar always shows
+# the model capability word "thinking" even when idle.
+BUSY_REGEX=${FM_BUSY_REGEX:-'esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel|thinking\.\.\.|Running a command|[🌑🌒🌓🌔🌕🌖🌗🌘]'}
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
 # than wake firstmate's LLM for each, this watcher classifies every wake in bash
