@@ -140,6 +140,26 @@ SH
   pass "fm-lock does not self-match .omp/ config paths"
 }
 
+test_fm_harness_omp_ancestry_uses_bun_script_argument() {
+  local fakebin out
+  fakebin=$(fm_fakebin "$TMP_ROOT/harness-fake")
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *"comm="*) printf '%s\n' 'bun'; exit 0 ;;
+  *"args="*) printf '%s\n' "${FM_FAKE_OMP_ARGS:?}"; exit 0 ;;
+  *"ppid="*) printf '%s\n' '1'; exit 0 ;;
+esac
+exit 1
+SH
+  chmod +x "$fakebin/ps"
+  out=$(FM_FAKE_OMP_ARGS='bun /opt/omp/bin/omp --auto-approve' PATH="$fakebin:$PATH" "$ROOT/bin/fm-harness.sh")
+  [ "$out" = omp ] || fail "fm-harness did not recognize omp as bun's script argument: $out"
+  out=$(FM_FAKE_OMP_ARGS='bun /home/agent/some-script.js /home/agent/.omp/agent/config.yml' PATH="$fakebin:$PATH" "$ROOT/bin/fm-harness.sh")
+  [ "$out" = unknown ] || fail "fm-harness mistook a later .omp config argument for the harness: $out"
+  pass "fm-harness identifies omp only from bun's script argument"
+}
+
 test_omp_launch_template_model_and_effort() {
   local rec case_dir home proj wt fakebin id out status log meta
   rec=$(make_spawn_case launch-flags)
@@ -175,5 +195,6 @@ test_omp_spawn_writes_turnend_extension_and_launches
 test_omp_teardown_removes_extension
 test_fm_lock_recognizes_omp_holder
 test_fm_lock_omp_args_do_not_self_match_config_paths
+test_fm_harness_omp_ancestry_uses_bun_script_argument
 test_omp_launch_template_model_and_effort
 test_omp_secondmate_template_loads_primary_extensions

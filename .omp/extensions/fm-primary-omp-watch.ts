@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { encodeFirstmateOperationalInput } from "./lib/fm-operational-input.ts";
 
 type ArmResult = {
   ok: boolean;
@@ -91,11 +92,12 @@ export default function (pi: ExtensionAPI) {
   };
   process.once("exit", cleanupOnProcessExit);
 
-  async function sendWake(message: string) {
-    await pi.sendUserMessage(
-      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first, handle the queued wake, then resume omp supervision.`,
-      { deliverAs: "followUp" },
+  async function sendWake(message: string): Promise<void> {
+    const content = encodeFirstmateOperationalInput(
+      "watcher",
+      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
     );
+    await pi.sendUserMessage(content, { deliverAs: "followUp" });
   }
 
   function startArm(): ArmResult {

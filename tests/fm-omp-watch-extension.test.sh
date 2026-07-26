@@ -16,9 +16,12 @@ export NODE_NO_WARNINGS=1
 
 install_omp_extension_fixture() {
   local repo=$1
-  mkdir -p "$repo/.omp/extensions"
+  mkdir -p "$repo/.omp/extensions/lib" "$repo/bin"
   cp "$WATCH_EXT" "$repo/.omp/extensions/fm-primary-omp-watch.ts"
   cp "$GUARD_EXT" "$repo/.omp/extensions/fm-primary-turnend-guard.ts"
+  cp "$ROOT/.omp/extensions/lib/fm-operational-input.ts" "$repo/.omp/extensions/lib/fm-operational-input.ts"
+  cp "$ROOT/bin/fm-operational-input.sh" "$repo/bin/fm-operational-input.sh"
+  chmod +x "$repo/bin/fm-operational-input.sh"
 }
 
 test_tracked_extensions_present_and_self_hashing() {
@@ -31,6 +34,7 @@ test_tracked_extensions_present_and_self_hashing() {
   assert_contains "$text" "fm-watch-arm-omp" "tracked watcher extension missing command name"
   assert_contains "$text" "fm-watch-arm.sh" "tracked watcher extension missing watcher arm"
   assert_contains "$text" "sendUserMessage" "tracked watcher extension missing omp wake API"
+  assert_contains "$text" 'encodeFirstmateOperationalInput(' "tracked watcher extension does not use the canonical operational-input encoder"
   assert_contains "$text" 'deliverAs: "followUp"' "tracked watcher extension missing followUp delivery"
   assert_contains "$text" ".omp-watch-extension-loaded" "tracked watcher extension missing loaded marker"
   assert_contains "$text" 'createHash("sha256").update(readFileSync(extensionFile)).digest("hex")' "watcher extension does not self-hash its own content for extensionVersion"
@@ -110,6 +114,59 @@ EOF
   expect_code 0 "$status" "omp custom tool must return the agent tool result shape"
   [ -z "$out" ] || fail "omp tool-result test printed output: $out"
   pass "omp custom tool returns text content and structured details"
+}
+
+test_omp_wake_uses_canonical_watcher_input() {
+  local repo home plugin out status
+  repo="$TMP_ROOT/omp-wake-root"
+  home="$TMP_ROOT/omp-wake-home"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-omp-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'signal: /tmp/omp-wake.status\n'
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" node --input-type=module 2>&1 <<'EOF'
+import { writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+let tool = null;
+let sent = null;
+const pi = {
+  on() {},
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_omp") tool = candidate;
+  },
+  sendUserMessage: async (content, options) => {
+    sent = { content, options };
+  },
+  zod: { object: (properties) => ({ type: "object", properties }) },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("tool-call-1", {}, undefined, undefined, {});
+for (let i = 0; i < 100 && !sent; i += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+const expected =
+  "\u2063FIRSTMATE_OP: v1 watcher: FIRSTMATE WATCHER WAKE: signal: /tmp/omp-wake.status\n\n" +
+  "Run bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.";
+if (sent?.content !== expected) {
+  throw new Error(`unexpected watcher input: ${JSON.stringify(sent?.content)}`);
+}
+if (sent?.options?.deliverAs !== "followUp") {
+  throw new Error(`unexpected delivery: ${JSON.stringify(sent?.options)}`);
+}
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp watcher wake must use the canonical watcher operational input"
+  [ -z "$out" ] || fail "omp watcher encoding test printed output: $out"
+  pass "omp watcher wake uses canonical watcher operational input"
 }
 
 test_omp_arm_distinguishes_session_lock_ownership() {
@@ -316,6 +373,7 @@ EOF
 
 test_tracked_extensions_present_and_self_hashing
 test_omp_tool_returns_agent_tool_result
+test_omp_wake_uses_canonical_watcher_input
 test_omp_arm_distinguishes_session_lock_ownership
 test_omp_guard_session_stop_continue_and_latch
 test_omp_guard_tool_call_blocks_on_seatbelt_deny
