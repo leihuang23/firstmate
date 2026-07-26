@@ -130,7 +130,7 @@ test_fm_lock_omp_args_do_not_self_match_config_paths() {
 #!/usr/bin/env bash
 case "$*" in
   *"comm="*) printf '%s\n' 'bun'; exit 0 ;;
-  *"args="*) printf '%s\n' 'bun /Users/leihuang/some-script.js /Users/leihuang/.omp/agent/config.yml'; exit 0 ;;
+  *"args="*) printf '%s\n' 'bun /home/agent/some-script.js /home/agent/.omp/agent/config.yml'; exit 0 ;;
 esac
 exit 1
 SH
