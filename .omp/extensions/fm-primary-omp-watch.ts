@@ -26,6 +26,7 @@ const marker = `${state}/.omp-watch-extension-loaded`;
 const deliveryFailureMarker = `${state}/.omp-watch-delivery-failed`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 const retryLimit = positiveInteger("FM_WATCH_REARM_RETRY_LIMIT", 5);
+const stableCycleMs = positiveInteger("FM_OMP_WATCH_STABLE_MS", 30000);
 
 let child: ChildProcess | null = null;
 let seq = 0;
@@ -158,6 +159,7 @@ export default function (pi: ExtensionAPI) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     child = armChild;
+    const startedAt = Date.now();
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -188,7 +190,8 @@ export default function (pi: ExtensionAPI) {
           message += `\n\nwatcher: FAILED - omp extension could not start a successor watcher cycle\n${successor.message}`;
         }
       } else {
-        message = startFailureSuccessor(message, String(armChild.pid ?? ""), established ? 0 : failureAttempt);
+        const stable = established && Date.now() - startedAt >= stableCycleMs;
+        message = startFailureSuccessor(message, String(armChild.pid ?? ""), stable ? 0 : failureAttempt);
       }
       void sendWake(message).catch(() => {});
     });

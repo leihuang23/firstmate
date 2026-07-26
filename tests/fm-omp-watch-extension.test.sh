@@ -37,6 +37,7 @@ test_tracked_extensions_present_and_self_hashing() {
   assert_contains "$text" 'encodeFirstmateOperationalInput(' "tracked watcher extension does not use the canonical operational-input encoder"
   assert_contains "$text" 'deliverAs: "followUp"' "tracked watcher extension missing followUp delivery"
   assert_contains "$text" 'FM_WATCH_REARM_RETRY_LIMIT' "tracked watcher extension missing bounded failure-path restarts"
+  assert_contains "$text" 'FM_OMP_WATCH_STABLE_MS' "tracked watcher extension missing genuine-stability retry reset"
   assert_contains "$text" ".omp-watch-delivery-failed" "tracked watcher extension missing durable delivery-failure marker"
   assert_contains "$text" ".omp-watch-extension-loaded" "tracked watcher extension missing loaded marker"
   assert_contains "$text" 'createHash("sha256").update(readFileSync(extensionFile)).digest("hex")' "watcher extension does not self-hash its own content for extensionVersion"
@@ -310,6 +311,141 @@ EOF
   expect_code 0 "$status" "omp typed arm failures must start a successor before rejected delivery"
   [ -z "$out" ] || fail "omp typed-failure successor test printed output: $out"
   pass "omp typed arm failures preserve successor supervision before delivery"
+}
+
+test_omp_established_failures_stay_within_retry_cap() {
+  local repo home plugin log out status
+  repo="$TMP_ROOT/omp-established-failure-root"
+  home="$TMP_ROOT/omp-established-failure-home"
+  log="$home/arm.log"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-omp-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s predecessor=%s\n' "$$" "${FM_WATCH_PREDECESSOR_ARM_PID:-none}" >> "${FM_ARM_LOG:?}"
+printf 'watcher: started synthetic established cycle\n'
+sleep 0.02
+printf 'watcher: FAILED - synthetic established arm failure\n'
+exit 7
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_WATCH_REARM_RETRY_LIMIT=2 FM_OMP_WATCH_STABLE_MS=1000 node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+let tool = null;
+let deliveries = 0;
+const pi = {
+  on() {},
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_omp") tool = candidate;
+  },
+  sendUserMessage: async () => {
+    deliveries += 1;
+    throw new Error("synthetic established-failure delivery rejection");
+  },
+  zod: { object: (properties) => ({ type: "object", properties }) },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("tool-call-established-failure", {}, undefined, undefined, {});
+const markerPath = `${process.env.FM_HOME}/state/.omp-watch-delivery-failed`;
+for (let i = 0; i < 500; i += 1) {
+  const rows = existsSync(process.env.FM_ARM_LOG)
+    ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n")
+    : [];
+  if (rows.length >= 3 && deliveries >= 3 && existsSync(markerPath)) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+await new Promise((resolve) => setTimeout(resolve, 150));
+const rows = readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n");
+if (rows.length !== 3) throw new Error(`established failures bypassed the two-retry cap: ${rows.length}`);
+if (deliveries !== 3) throw new Error(`established failure deliveries bypassed the cap: ${deliveries}`);
+const marker = readFileSync(markerPath, "utf8");
+if (!marker.includes("could not restore watcher continuity after 2 retries")) {
+  throw new Error(`established failure marker lost the cap detail: ${marker}`);
+}
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp established failures must preserve the retry attempt count; output: $out"
+  [ -z "$out" ] || fail "omp established-failure cap test printed output: $out"
+  pass "omp established failures stay within the restart cap"
+}
+
+test_omp_stable_cycle_resets_retry_budget() {
+  local repo home plugin log out status
+  repo="$TMP_ROOT/omp-stable-cycle-root"
+  home="$TMP_ROOT/omp-stable-cycle-home"
+  log="$home/arm.log"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-omp-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s predecessor=%s\n' "$$" "${FM_WATCH_PREDECESSOR_ARM_PID:-none}" >> "${FM_ARM_LOG:?}"
+arm_count=$(wc -l < "$FM_ARM_LOG" | tr -d '[:space:]')
+case "$arm_count" in
+  1)
+    printf 'watcher: FAILED - synthetic initial arm failure\n'
+    exit 7
+    ;;
+  2)
+    printf 'watcher: started synthetic stable cycle\n'
+    sleep 0.08
+    printf 'watcher: FAILED - synthetic post-stability failure\n'
+    exit 7
+    ;;
+  3)
+    printf 'watcher: FAILED - synthetic retry after stable cycle\n'
+    exit 7
+    ;;
+esac
+trap 'exit 0' TERM INT
+while :; do sleep 0.05; done
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_WATCH_REARM_RETRY_LIMIT=2 FM_OMP_WATCH_STABLE_MS=50 node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+let tool = null;
+const pi = {
+  on() {},
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_omp") tool = candidate;
+  },
+  sendUserMessage: async () => {},
+  zod: { object: (properties) => ({ type: "object", properties }) },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("tool-call-stable-cycle", {}, undefined, undefined, {});
+for (let i = 0; i < 500; i += 1) {
+  const rows = existsSync(process.env.FM_ARM_LOG)
+    ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n")
+    : [];
+  if (rows.length >= 4) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+const rows = readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n");
+if (rows.length !== 4) throw new Error(`stable watcher cycle did not reset the retry budget: ${rows.length}`);
+await new Promise((resolve) => setTimeout(resolve, 100));
+const stableRows = readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n");
+if (stableRows.length !== 4) throw new Error(`stable-cycle reset duplicated arms: ${stableRows.length}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp genuinely stable cycles must reset the retry budget; output: $out"
+  [ -z "$out" ] || fail "omp stable-cycle retry-reset test printed output: $out"
+  pass "omp stable cycles reset the restart budget"
 }
 
 test_omp_spawn_errors_retry_with_cap() {
@@ -696,6 +832,8 @@ test_omp_tool_returns_agent_tool_result
 test_omp_wake_uses_canonical_watcher_input
 test_omp_delivery_rejection_keeps_successor_and_status
 test_omp_typed_failure_starts_successor_before_rejected_delivery
+test_omp_established_failures_stay_within_retry_cap
+test_omp_stable_cycle_resets_retry_budget
 test_omp_spawn_errors_retry_with_cap
 test_omp_arm_distinguishes_session_lock_ownership
 test_omp_guard_session_stop_continue_and_latch
