@@ -9,7 +9,15 @@
 # This file is sourced by scripts and has no side effects on source.
 
 # Known harness command names; extend when a new adapter is verified.
-FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$'
+FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^omp$'
+
+# omp runs as `bun <path>/omp ...`: the interpreter comm never names the harness,
+# so match the script-path word precisely. `.omp/` config paths in args must not
+# self-match, so this check runs before the loose FM_HARNESS_RE args match.
+fm_args_are_omp() {
+  case "$1" in *"/omp "*|*/omp|omp) return 0 ;; esac
+  return 1
+}
 
 # Walk the current process ancestry (up to 8 hops) and print the first pid whose
 # command looks like a verified harness. The harness pid lives as long as the
@@ -22,9 +30,11 @@ fm_harness_ancestry_pid() {
     if printf '%s' "$(basename "$comm")" | grep -qE "$FM_HARNESS_RE"; then
       echo "$pid"; return 0
     fi
-    # Bare interpreter (e.g. node): match the harness name in its script path.
+    # Bare interpreter (e.g. node, bun): match the harness name in its script path.
     case "$comm" in
-      *node*|*python*) printf '%s' "$args" | grep -qE "$FM_HARNESS_RE" && { echo "$pid"; return 0; } ;;
+      *node*|*python*|*bun*)
+        fm_args_are_omp "$args" && { echo "$pid"; return 0; }
+        printf '%s' "$args" | grep -qE "$FM_HARNESS_RE" && { echo "$pid"; return 0; } ;;
     esac
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || return 1
@@ -34,10 +44,12 @@ fm_harness_ancestry_pid() {
 
 # True if $1 is a live process that looks like a verified harness.
 fm_harness_pid_alive() {
-  local pid=$1 comm
+  local pid=$1 comm args
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
-  printf '%s' "$(basename "$comm") $(ps -o args= -p "$pid" 2>/dev/null)" | grep -qE "$FM_HARNESS_RE"
+  args=$(ps -o args= -p "$pid" 2>/dev/null)
+  fm_args_are_omp "$args" && return 0
+  printf '%s' "$(basename "$comm") $args" | grep -qE "$FM_HARNESS_RE"
 }
 
 # True when state dir $1 holds a session lock whose pid is the harness ancestor

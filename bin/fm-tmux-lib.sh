@@ -76,6 +76,10 @@
 # busy signals on their own.
 # The full moon-phase set remains locale- and emoji-font-sensitive because Kimi
 # exposes no stable ASCII busy token.
+# Omp's signature is the TUI busy line ` ⠧ Working… ⟦esc⟧` with a U+2026
+# single-glyph ellipsis (verified byte-level 2026-07-26 on omp 17.1.3); pi's
+# three-dot form does not match it, and print-mode output uses the three-dot
+# form, so both spellings are matched, scoped to recorded omp tasks.
 FM_TMUX_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
 FM_TMUX_CLAUDE_BUSY_REGEX_DEFAULT='esc to interrupt|…[[:space:]]+\([0-9]+[smh]'
 FM_TMUX_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
@@ -83,6 +87,7 @@ FM_TMUX_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_TMUX_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 FM_TMUX_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
 FM_TMUX_KIMI_BUSY_REGEX_DEFAULT='^[[:space:]]*(🌑|🌒|🌓|🌔|🌕|🌖|🌗|🌘)[[:space:]]+·[[:space:]]+'
+FM_TMUX_OMP_BUSY_REGEX_DEFAULT='Working(\.\.\.|…)'
 
 fm_busy_lines_match() {  # [harness]
   local harness=${1:-} lines regex
@@ -97,6 +102,7 @@ fm_busy_lines_match() {  # [harness]
       pi) regex=$FM_TMUX_PI_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_TMUX_GROK_BUSY_REGEX_DEFAULT ;;
       kimi) regex=$FM_TMUX_KIMI_BUSY_REGEX_DEFAULT ;;
+      omp) regex=$FM_TMUX_OMP_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_TMUX_BUSY_REGEX_DEFAULT ;;
       *)
         # A supplied harness must never borrow another harness's signature.

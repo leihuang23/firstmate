@@ -1075,6 +1075,25 @@ test_hook_claude_mode_secondmate_reblocks_like_primary() {
   pass "fm-turnend-guard --claude: secondmate home re-blocks unclaimed and allows auto-arm-claimed stops"
 }
 
+test_omp_extension_blocks_stop_with_continuation() {
+  local ext content
+  ext="$ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
+  [ -f "$ext" ] || fail "tracked omp primary extension is missing"
+  content=$(cat "$ext")
+  assert_contains "$content" 'session_stop' "omp extension must hook omp's blockable session_stop"
+  assert_contains "$content" 'fm-turnend-guard.sh' "omp extension must invoke the shared guard"
+  assert_contains "$content" 'continue: true' "omp extension must force a continuation when the guard blocks"
+  assert_contains "$content" 'additionalContext' "omp extension must feed the block reason back to the model"
+  assert_contains "$content" 'guardContinueActive' "omp extension must carry a one-continuation loop guard"
+  assert_contains "$content" 'TURN WOULD END BLIND' "omp extension must keep the blind-turn reason"
+  assert_contains "$content" 'session-start operating block' "omp extension must use harness-neutral repair wording"
+  assert_contains "$content" '.omp-turnend-extension-loaded' "omp extension must write its loaded marker for session-start diagnostics"
+  assert_contains "$content" 'lockOwnership' "omp extension loaded marker must respect the session lock"
+  assert_contains "$content" 'return { block: true, reason:' "omp extension changed the checker exit-2 block result"
+  assert_not_contains "$content" 'Run bin/fm-watch-arm.sh as a background task' "omp extension must not hardcode the old watcher-arm instruction"
+  pass ".omp primary extension: session_stop forces one continuation through the shared guard"
+}
+
 test_grok_hook_invokes_adapter() {
   local settings command
   settings="$ROOT/.grok/hooks/fm-primary-turnend-guard.json"
@@ -1126,6 +1145,7 @@ test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_forces_followup
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
+test_omp_extension_blocks_stop_with_continuation
 test_grok_hook_invokes_adapter
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks

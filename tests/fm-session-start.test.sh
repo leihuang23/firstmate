@@ -405,13 +405,13 @@ SH
 # run_session_start <home> <root> <path>
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
-# Markers today: CLAUDECODE (claude), PI_CODING_AGENT (pi), GROK_AGENT (grok).
-# codex and opencode have no env markers (ancestry only). Without this, a local
-# claude/pi/grok session fails cases that pin a different fake harness while CI
+# Markers today: CLAUDECODE (claude), PI_CODING_AGENT (pi), GROK_AGENT (grok),
+# OMPCODE (omp). Without this, a local
+# claude/pi/grok/omp session fails cases that pin a different fake harness while CI
 # (no ambient markers) still passes.
 run_session_start() {
   local home=$1 root=$2 path=$3
-  env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT \
+  env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u OMPCODE \
     FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
     "$SESSION_START"
 }
@@ -1355,6 +1355,62 @@ EOF
   pass "session start rejects Pi loaded markers from previous sessions"
 }
 
+test_supervision_block_omp_diagnostic() {
+  local rec root home fakebin out block_count
+  rec=$(new_world omp-supervision-block)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" omp
+
+  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  block_count=$(printf '%s\n' "$out" | grep -c '^SUPERVISION OPERATING INSTRUCTIONS - primary harness:')
+  [ "$block_count" -eq 1 ] || fail "expected exactly one supervision block, got $block_count"
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: omp" "omp supervision block missing"
+  assert_contains "$out" "Mode: omp extension background wake." "omp snippet missing from session start"
+  assert_contains "$out" "OMP_WATCH_EXTENSION: not loaded" "omp extension load diagnostic missing"
+  assert_contains "$out" "restart plain omp so $root/.omp/extensions/fm-primary-turnend-guard.ts and $root/.omp/extensions/fm-primary-omp-watch.ts auto-load" "omp extension load diagnostic omits an extension path"
+  pass "session start emits the omp supervision block and reports omp extension load state"
+}
+
+test_extension_diagnostic_suppressed_when_read_only() {
+  local rec root home fakebin out holder_pid
+  rec=$(new_world omp-read-only-suppression)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  # Every pid reports as the omp harness: detect_own resolves omp, fm-lock finds
+  # the shell's own ancestry harness pid, and the pre-written lock (a real live
+  # sleep pid) reads as a DIFFERENT live harness, forcing the read-only path.
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "$*" in
+  *"comm="*) printf '/usr/local/bin/omp\n'; exit 0 ;;
+  *"args="*) printf 'omp\n'; exit 0 ;;
+  *"ppid="*) printf '1\n'; exit 0 ;;
+esac
+exit 1
+SH
+  chmod +x "$fakebin/ps"
+  sleep 60 &
+  holder_pid=$!
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+
+  assert_contains "$out" "READ-ONLY SESSION" "session did not report the read-only path"
+  assert_contains "$out" "primary harness: omp" "omp supervision block missing in read-only mode"
+  assert_not_contains "$out" "OMP_WATCH_EXTENSION" "omp extension diagnostic fired in a read-only session"
+  assert_not_contains "$out" "PI_WATCH_EXTENSION" "pi extension diagnostic fired in a read-only session"
+  pass "session start suppresses extension load diagnostics when read-only"
+}
+
 test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
@@ -1378,6 +1434,8 @@ test_fleet_digest_empty_fleet
 test_next_step_sources_x_mode_cadence
 test_next_step_afk_delegates_to_daemon
 test_supervision_block_exactly_one_and_pi_diagnostic
+test_supervision_block_omp_diagnostic
+test_extension_diagnostic_suppressed_when_read_only
 test_pi_diagnostic_rejects_stale_loaded_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker
 test_pi_diagnostic_rejects_missing_turnend_guard_marker

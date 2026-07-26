@@ -152,6 +152,7 @@ Prose may improve without changing adapter behavior.
 - Codex blocks on exit 2 and displays stderr.
 - OpenCode throws only when the checker exits 2.
 - Pi returns `{block: true}` only when the checker exits 2.
+- Omp returns `{block: true, reason}` only when the checker exits 2.
 
 ## Harness wiring
 
@@ -162,6 +163,7 @@ Prose may improve without changing adapter behavior.
 | Grok | `.toolInput.command` | `.grok/hooks/fm-primary-pretool-check.json` forwards stdin and Grok consumes the stdout `decision=deny` object. |
 | OpenCode | `output.args.command` | `.opencode/plugins/fm-primary-pretool-check.js` passes one `--command` argument and throws only for exit 2. |
 | Pi | `event.input.command` | `.pi/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true}` only for exit 2. |
+| Omp | `event.input.command` | `.omp/extensions/fm-primary-turnend-guard.ts` passes one `--command` argument and returns `{block: true, reason}` only for exit 2 (verified 2026-07-26 on omp 17.1.3; the model received the verbatim `[watcher-direct]` deny). |
 
 Grok project hooks require folder trust.
 Every shell variable reference in a Grok hook command must carry an inline default such as `${GROK_WORKSPACE_ROOT:-}` because Grok expands the raw hook command before `bash -lc` runs it.
@@ -223,6 +225,8 @@ Native supervision paths were also validated in the same scratch project:
 - Codex ran the foreground checkpoint above and produced `CHECKPOINT_EXECUTED`.
 - OpenCode ran in an interactive TUI on `tmux -L fm-pretool-smoke`, reached `session.idle`, and its unchanged watch-arm plugin created the scratch automatic-arm marker.
 - Pi loaded both primary extensions, called `fm_watch_arm_pi`, and created the scratch automatic-arm marker.
+
+Omp 17.1.3 was validated separately on 2026-07-26: with the tracked `.omp/extensions/fm-primary-turnend-guard.ts` auto-loaded, an instructed `bin/fm-watch.sh` bash call was blocked and the model received the verbatim `[watcher-direct]` deny; the `fm_watch_arm_omp` tool armed the watcher against a scratch `FM_HOME` and reported `watcher: started omp extension arm child 1`.
 
 Every native-path automatic marker was present and every deny sentinel remained absent.
 
