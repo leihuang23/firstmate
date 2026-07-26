@@ -1,7 +1,7 @@
 // Firstmate primary watcher bridge for omp (Oh My Pi).
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
@@ -23,6 +23,7 @@ const state = process.env.FM_STATE_OVERRIDE || `${fmHome}/state`;
 const config = process.env.FM_CONFIG_OVERRIDE || `${fmHome}/config`;
 const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
+const deliveryFailureStatus = `${state}/omp-watch-delivery.status`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 
 let child: ChildProcess | null = null;
@@ -97,10 +98,18 @@ export default function (pi: ExtensionAPI) {
       "watcher",
       `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
     );
-    await pi.sendUserMessage(content, { deliverAs: "followUp" });
+    try {
+      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+      rmSync(deliveryFailureStatus, { force: true });
+    } catch (error) {
+      mkdirSync(state, { recursive: true });
+      const detail = error instanceof Error ? error.message : String(error);
+      writeFileSync(deliveryFailureStatus, `watcher: FAILED - omp wake delivery rejected: ${detail}\n`);
+      throw error;
+    }
   }
 
-  function startArm(): ArmResult {
+  function startArm(predecessorArmPid = ""): ArmResult {
     const ownership = lockOwnership();
     if (ownership === "other") return { ok: false, message: "watcher: read-only - session lock is held by another firstmate session" };
     if (ownership === "missing") {
@@ -118,38 +127,44 @@ export default function (pi: ExtensionAPI) {
       FM_ROOT_OVERRIDE: fmRoot,
       FM_CONFIG_OVERRIDE: config,
       FM_WATCH_ARM_SCRIPT: armScript,
+      FM_WATCH_PREDECESSOR_ARM_PID: predecessorArmPid,
     };
-    child = spawn("bash", ["-lc", "config_dir=\"${FM_CONFIG_OVERRIDE:-$FM_HOME/config}\"; [ -f \"$config_dir/x-mode.env\" ] && . \"$config_dir/x-mode.env\"; exec \"$FM_WATCH_ARM_SCRIPT\" --restart"], {
+    const armChild = spawn("bash", ["-lc", "config_dir=\"${FM_CONFIG_OVERRIDE:-$FM_HOME/config}\"; [ -f \"$config_dir/x-mode.env\" ] && . \"$config_dir/x-mode.env\"; exec \"$FM_WATCH_ARM_SCRIPT\" --restart"], {
       cwd: fmRoot,
       env,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    child = armChild;
     let stdout = "";
     let stderr = "";
-    child.stdout?.on("data", (chunk: Buffer) => {
+    let settled = false;
+    armChild.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
     });
-    child.stderr?.on("data", (chunk: Buffer) => {
+    armChild.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on("close", async (code: number | null) => {
-      child = null;
+    armChild.on("close", (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      if (child === armChild) child = null;
       const reason = actionableLine(`${stdout}\n${stderr}`);
       const failure = reason ? "" : failureLine(stdout, stderr, code);
       if (!reason && !failure) return;
-      try {
-        await sendWake(reason || failure);
-      } catch {
-        // omp owns delivery errors; fail open so the extension never wedges the session.
+      let message = reason || failure;
+      if (reason) {
+        const successor = startArm(String(armChild.pid ?? ""));
+        if (!successor.ok) {
+          message += `\n\nwatcher: FAILED - omp extension could not start a successor watcher cycle\n${successor.message}`;
+        }
       }
+      void sendWake(message).catch(() => {});
     });
-    child.on("error", async (error: Error) => {
-      child = null;
-      try {
-        await sendWake(`watcher: FAILED - omp extension arm child ${id} failed: ${error.message}`);
-      } catch {
-        // Fail open.
-      }
+    armChild.on("error", (error: Error) => {
+      if (settled) return;
+      settled = true;
+      if (child === armChild) child = null;
+      void sendWake(`watcher: FAILED - omp extension arm child ${id} failed: ${error.message}`).catch(() => {});
     });
     return { ok: true, message: `watcher: started omp extension arm child ${id}` };
   }

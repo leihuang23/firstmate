@@ -44,6 +44,7 @@ If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot s
 - Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
 - Omp listens for the blockable `session_stop` event in `.omp/extensions/fm-primary-turnend-guard.ts`, runs the shared guard once per stop attempt, and returns `{ continue: true, additionalContext }` once when the guard exits 2.
   The same extension file carries the session-start nudge and the watcher-arm, persistent-cd, and delegation PreToolUse guards, and `.omp/extensions/` auto-loads with no trust gate.
+  Its shared guard invocation uses Omp mode so either in-flight tasks or an X-mode relay poll count as supervision need.
 - Grok registers a `Stop` hook in `.grok/hooks/fm-primary-turnend-guard.json` and uses `bin/fm-turnend-guard-grok.sh` to resume the reported session once when the shared guard returns 2.
   The adapter intentionally omits `--permission-mode`, so a passive hook cannot grant stronger permissions than the resumed session default.
 

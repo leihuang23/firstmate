@@ -64,7 +64,7 @@ type ScriptResult = { code: number; stderr: string };
 
 function runGuard(): Promise<ScriptResult> {
   const { promise, resolve: resolveResult } = Promise.withResolvers<ScriptResult>();
-  const child = spawn(`${root}/bin/fm-turnend-guard.sh`, {
+  const child = spawn(`${root}/bin/fm-turnend-guard.sh`, ["--omp"], {
     stdio: ["pipe", "ignore", "pipe"],
   });
   let stderr = "";

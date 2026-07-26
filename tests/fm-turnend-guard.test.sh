@@ -927,6 +927,22 @@ run_hook_claude() {
   printf '{"stop_hook_active":%s,"session_id":"sess-claude-mode"}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1
 }
 
+run_hook_omp() {
+  local dir=$1 home
+  home=$(cd "$dir" && pwd)
+  printf '{"stop_hook_active":false,"session_id":"sess-omp-mode"}' | OMPCODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --omp 2>&1
+}
+
+test_hook_omp_mode_reblocks_x_mode_without_tasks() {
+  local dir out status
+  dir=$(make_primary_dir "$TMP_ROOT/hook-omp-x-mode")
+  : > "$dir/state/x-watch.check.sh"
+  out=$(run_hook_omp "$dir"); status=$?
+  expect_code 2 "$status" "--omp mode must block an X-mode-only stop"
+  assert_contains "$out" "X-mode relay polling needs supervision" "--omp X-mode block must name the active supervision need"
+  pass "fm-turnend-guard --omp: X-mode-only homes block without a live watcher"
+}
+
 # The 2026-07-21 incident regression: after a spent forced continuation the old
 # one-shot loop guard ALLOWED a blind stop (stop_hook_active=true) while the
 # watcher was already dead. In --claude mode the guard must re-block instead.
@@ -1149,6 +1165,7 @@ test_omp_extension_blocks_stop_with_continuation
 test_grok_hook_invokes_adapter
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
+test_hook_omp_mode_reblocks_x_mode_without_tasks
 test_hook_claude_mode_allows_when_autoarm_owner_alive
 test_hook_claude_mode_allows_on_fresh_rewake_epoch
 test_hook_claude_mode_stale_rewake_epoch_blocks
