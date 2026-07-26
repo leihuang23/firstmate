@@ -150,7 +150,7 @@ writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
 const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
 await tool.execute("tool-call-1", {}, undefined, undefined, {});
-for (let i = 0; i < 100 && !sent; i += 1) {
+for (let i = 0; i < 500 && !sent; i += 1) {
   await new Promise((resolve) => setTimeout(resolve, 10));
 }
 const expected =

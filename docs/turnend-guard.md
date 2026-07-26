@@ -14,7 +14,7 @@ Do not infer this guard's scope, loop safety, or compatibility tradeoffs for tho
 `bin/fm-guard.sh` is a pull-based warning that runs only when another supervision command invokes it.
 The turn-end guard closes the remaining gap at the primary's own turn boundary.
 When work is in flight and no identity-matched watcher has a fresh beacon, the harness integration must either block the turn end or force one bounded follow-up that uses the recovery instruction from the emitted session-start protocol.
-The guard remains a backstop; [`watcher-continuity.md`](watcher-continuity.md) owns normal continuity.
+The guard remains a backstop except for Omp's bounded post-wake re-arm role; [`watcher-continuity.md`](watcher-continuity.md) owns the complete continuity contract.
 
 ## Shared predicate
 
@@ -43,7 +43,7 @@ If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot s
 - OpenCode listens for `session.idle` in `.opencode/plugins/fm-primary-turnend-guard.js`, lets the watcher coordinator act first, and calls `client.session.promptAsync` once when the guard returns 2.
 - Pi listens for `agent_settled` in `.pi/extensions/fm-primary-turnend-guard.ts`, runs once per logical agent run, and calls `pi.sendUserMessage(..., { deliverAs: "followUp" })` once when the guard returns 2.
 - Omp listens for the blockable `session_stop` event in `.omp/extensions/fm-primary-turnend-guard.ts`, runs the shared guard once per stop attempt, and returns `{ continue: true, additionalContext }` once when the guard exits 2.
-  The same extension file carries the session-start nudge and both PreToolUse seatbelts, and `.omp/extensions/` auto-loads with no trust gate.
+  The same extension file carries the session-start nudge and the watcher-arm, persistent-cd, and delegation PreToolUse guards, and `.omp/extensions/` auto-loads with no trust gate.
 - Grok registers a `Stop` hook in `.grok/hooks/fm-primary-turnend-guard.json` and uses `bin/fm-turnend-guard-grok.sh` to resume the reported session once when the shared guard returns 2.
   The adapter intentionally omits `--permission-mode`, so a passive hook cannot grant stronger permissions than the resumed session default.
 
@@ -74,7 +74,7 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it alwa
 
 - Child crewmate and scout worktrees are outside scope.
 - A valid secondmate home is in scope; an idle secondmate endpoint with no X-mode relay poll remains healthy because it has no supervision need.
-- Claude and Codex block directly, while OpenCode, Pi, and Grok use bounded passive follow-ups.
+- Claude, Codex, and Omp block directly, while OpenCode, Pi, and Grok use bounded passive follow-ups.
 - OpenCode headless mode and untrusted Grok project hooks remain fail-open at the host boundary.
 - Kimi Code CLI 0.29.1 exposes only global `[[hooks]]` configuration in `~/.kimi-code/config.toml`, including a `Stop` event with snake_case payload fields `hook_event_name`, `session_id`, `cwd`, and `stop_hook_active`.
 - Kimi has no project-level hook configuration and remains outside the primary guard integrations above.
