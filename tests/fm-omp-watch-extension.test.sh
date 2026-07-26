@@ -59,6 +59,7 @@ test_tracked_extensions_present_and_self_hashing() {
   assert_contains "$text" "fm-turnend-guard.sh" "guard extension does not run the shared guard predicate"
   assert_contains "$text" "fm-arm-pretool-check.sh" "guard extension does not run the watcher-arm PreToolUse seatbelt"
   assert_contains "$text" "fm-cd-pretool-check.sh" "guard extension does not run the cd-guard PreToolUse seatbelt"
+  assert_contains "$text" "fm-subagent-pretool-check.sh" "guard extension does not route non-bash tools through the delegation guard"
   assert_contains "$text" "block: true" "guard extension does not block tool calls on a seatbelt deny"
   assert_contains "$text" "fm-sessionstart-nudge.sh" "guard extension does not run the session-start nudge wrapper"
   assert_contains "$text" "firstmate-sessionstart-nudge" "guard extension missing the nudge custom message type"
@@ -326,6 +327,69 @@ EOF
   pass "omp guard blocks bash tool calls on a seatbelt deny"
 }
 
+test_omp_guard_tool_call_routes_nonbash_through_subagent_checker() {
+  local repo home plugin out status
+  repo="$TMP_ROOT/omp-subagent-root"
+  home="$TMP_ROOT/omp-subagent-home"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-turnend-guard.ts"
+  cat > "$repo/bin/fm-cd-pretool-check.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  cat > "$repo/bin/fm-arm-pretool-check.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  cat > "$repo/bin/fm-subagent-pretool-check.sh" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FM_SUBAGENT_LOG"
+if [ "${2:-}" = task ]; then
+  printf 'DENY-SUBAGENT: [subagent-dispatch] nope\n' >&2
+  exit 2
+fi
+exit 0
+SH
+  cat > "$repo/bin/fm-turnend-guard.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$repo"/bin/*.sh
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_SUBAGENT_LOG="$home/subagent.log" node --input-type=module 2>&1 <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const handlers = {};
+const pi = {
+  on(event, handler) { handlers[event] = handler; },
+  registerCommand() {},
+  registerTool() {},
+  sendMessage() {},
+  sendUserMessage: async () => {},
+};
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+if (typeof handlers.tool_call !== "function") throw new Error("tool_call handler not registered");
+
+const blocked = await handlers.tool_call({ type: "tool_call", toolName: "task", input: { prompt: "do work" } });
+if (blocked?.block !== true) throw new Error(`expected block: ${JSON.stringify(blocked)}`);
+if (!String(blocked.reason).includes("DENY-SUBAGENT")) throw new Error(`missing deny reason: ${blocked.reason}`);
+
+const allowed = await handlers.tool_call({ type: "tool_call", toolName: "read", input: { path: "x" } });
+if (allowed?.block) throw new Error("ordinary non-bash tools must not be blocked");
+
+await handlers.tool_call({ type: "tool_call", toolName: "bash", input: { command: "echo hi" } });
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp guard must route non-bash tools through the delegation guard"
+  [ -z "$out" ] || fail "omp subagent test printed output: $out"
+  assert_grep '--tool task' "$home/subagent.log" "subagent checker did not receive the task tool name"
+  assert_grep '--tool read' "$home/subagent.log" "subagent checker did not receive the read tool name"
+  ! grep -F 'bash' "$home/subagent.log" >/dev/null || fail "subagent checker saw a bash tool call"
+  pass "omp guard routes non-bash tools through the delegation guard"
+}
+
 test_omp_guard_sessionstart_nudge_uses_sendMessage() {
   local repo home plugin out status
   repo="$TMP_ROOT/omp-nudge-root"
@@ -377,4 +441,5 @@ test_omp_wake_uses_canonical_watcher_input
 test_omp_arm_distinguishes_session_lock_ownership
 test_omp_guard_session_stop_continue_and_latch
 test_omp_guard_tool_call_blocks_on_seatbelt_deny
+test_omp_guard_tool_call_routes_nonbash_through_subagent_checker
 test_omp_guard_sessionstart_nudge_uses_sendMessage

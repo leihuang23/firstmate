@@ -423,6 +423,7 @@ The turn-end guard hooks omp's blockable `session_stop` extension event: when th
 omp caps consecutive `session_stop` continuations at 8, and the extension's latch allows the forced continuation's own stop exactly once, mirroring claude's `stop_hook_active` contract.
 `session_stop` never fires for task/subagent sessions, so it is a primary-only signal.
 The PreToolUse seatbelts ride the same extension's `tool_call` handler, returning `{block: true, reason}` on a checker exit 2 (verified live: the model received the verbatim `[watcher-direct]` deny).
+Every non-bash `tool_call` name routes through `bin/fm-subagent-pretool-check.sh --tool` in the same handler, so an omp primary cannot launch untracked work through the built-in `task` tool (verified live 2026-07-26: a real `task` call was denied with the verbatim `[subagent-dispatch]` message).
 The session-start nudge rides the extension's `session_start` handler through `pi.sendMessage` with `display: false` (verified live: the injected nudge reached the model and was obeyed).
 The watcher bridge registers the `fm_watch_arm_omp` tool and `/fm-watch-arm-omp` command and owns the `bin/fm-watch-arm.sh --restart` child, sending a follow-up user message on an actionable wake (verified live, including the read-only refusal when another live session holds the lock).
 Headless `omp -p` runs the same extensions and events; interactive TUI is the supported primary supervision host.

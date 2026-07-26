@@ -84,9 +84,9 @@ function runGuard(): Promise<ScriptResult> {
 // pi.on("tool_call", ...) can block (verified 2026-07-26 against omp 17.1.3:
 // returning {block: true} prevents the bash command from running). Each owner
 // script owns its own decision and is inert outside the real primary checkout.
-function runChecker(script: string, command: string): Promise<ScriptResult> {
+function runChecker(script: string, flag: string, value: string): Promise<ScriptResult> {
   const { promise, resolve: resolveResult } = Promise.withResolvers<ScriptResult>();
-  const child = spawn(`${root}/bin/${script}`, ["--command", command], {
+  const child = spawn(`${root}/bin/${script}`, [flag, value], {
     stdio: ["ignore", "ignore", "pipe"],
   });
   let stderr = "";
@@ -123,14 +123,26 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("tool_call", async (event) => {
-    if (event.type !== "tool_call" || event.toolName !== "bash") return {};
+    if (event.type !== "tool_call") return {};
+    if (event.toolName !== "bash") {
+      // Delegation guard (bin/fm-subagent-pretool-check.sh, docs/subagent-guard.md):
+      // every non-bash tool name routes through the shape classifier, so an omp
+      // primary cannot launch untracked work through the built-in task tool.
+      // The checker owns primary scope, fail-open, and the FM_ALLOW_SUBAGENT
+      // escape hatch; this extension is only the transport.
+      const name = String(event.toolName ?? "");
+      if (!name) return {};
+      const sub = await runChecker("fm-subagent-pretool-check.sh", "--tool", name);
+      if (sub.code !== 2) return {};
+      return { block: true, reason: sub.stderr.trim() || "denied by the delegation PreToolUse guard" };
+    }
     const command = bashCommandOf(event.input);
     if (!command) return {};
-    const cdResult = await runChecker("fm-cd-pretool-check.sh", command);
+    const cdResult = await runChecker("fm-cd-pretool-check.sh", "--command", command);
     if (cdResult.code === 2) {
       return { block: true, reason: cdResult.stderr.trim() || "denied by the cd-guard PreToolUse seatbelt" };
     }
-    const result = await runChecker("fm-arm-pretool-check.sh", command);
+    const result = await runChecker("fm-arm-pretool-check.sh", "--command", command);
     if (result.code !== 2) return {};
     return { block: true, reason: result.stderr.trim() || "denied by the watcher-arm PreToolUse seatbelt" };
   });
