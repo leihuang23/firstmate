@@ -76,6 +76,10 @@
 # busy signals on their own.
 # The full moon-phase set remains locale- and emoji-font-sensitive because Kimi
 # exposes no stable ASCII busy token.
+# Omp's signature is the TUI busy line ` ⠧ Working… ⟦esc⟧` with a U+2026
+# single-glyph ellipsis (verified byte-level 2026-07-26 on omp 17.1.3); pi's
+# three-dot form does not match it, and print-mode output uses the three-dot
+# form, so both spellings are matched, scoped to recorded omp tasks.
 FM_TMUX_BUSY_REGEX_DEFAULT='esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'
 FM_TMUX_CLAUDE_BUSY_REGEX_DEFAULT='esc to interrupt|…[[:space:]]+\([0-9]+[smh]'
 FM_TMUX_CODEX_BUSY_REGEX_DEFAULT='esc to interrupt'
@@ -83,6 +87,7 @@ FM_TMUX_OPENCODE_BUSY_REGEX_DEFAULT='esc interrupt'
 FM_TMUX_PI_BUSY_REGEX_DEFAULT='Working\.\.\.'
 FM_TMUX_GROK_BUSY_REGEX_DEFAULT='Ctrl\+c:cancel'
 FM_TMUX_KIMI_BUSY_REGEX_DEFAULT='^[[:space:]]*(🌑|🌒|🌓|🌔|🌕|🌖|🌗|🌘)[[:space:]]+·[[:space:]]+'
+FM_TMUX_OMP_BUSY_REGEX_DEFAULT='Working(\.\.\.|…)'
 
 fm_busy_lines_match() {  # [harness]
   local harness=${1:-} lines regex
@@ -97,6 +102,7 @@ fm_busy_lines_match() {  # [harness]
       pi) regex=$FM_TMUX_PI_BUSY_REGEX_DEFAULT ;;
       grok) regex=$FM_TMUX_GROK_BUSY_REGEX_DEFAULT ;;
       kimi) regex=$FM_TMUX_KIMI_BUSY_REGEX_DEFAULT ;;
+      omp) regex=$FM_TMUX_OMP_BUSY_REGEX_DEFAULT ;;
       '') regex=$FM_TMUX_BUSY_REGEX_DEFAULT ;;
       *)
         # A supplied harness must never borrow another harness's signature.
@@ -177,11 +183,11 @@ fm_tmux_composer_geometry_spaces() {  # <content-inner> -> spaces
 # complete bordered box that structurally contains the cursor, plus whether its
 # geometry is ambiguous. The cursor may be on any content row or on the bottom
 # border; no fixed cursor offset is used.
-fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bottom> <ambiguous>"
+fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bottom> <ambiguous> <content-mode>"
   local cy=$1 pane=$2 line indent left_stripped trimmed kind family current_family=
   local side_family top_inner top_spaces='' geometry_check=0 geometry_ambiguous=0
   local content_inner content_spaces bottom_inner bottom_spaces
-  local current_indent=
+  local current_indent='' content_mode=rows top_width=0
   local row=0 top=-1 valid=0 content_rows=0 unsafe=0 cursor_structural=0
   while IFS= read -r line; do
     indent=${line%%[![:space:]]*}
@@ -214,6 +220,8 @@ fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bott
       content_rows=0
       geometry_ambiguous=0
       geometry_check=1
+      content_mode=rows
+      top_width=${#trimmed}
       top_inner=$trimmed
       case "$family" in
         rounded) top_inner=${top_inner#╭}; top_inner=${top_inner%╮}; top_spaces=${top_inner//─/ } ;;
@@ -222,15 +230,25 @@ fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bott
         heavy) top_inner=${top_inner#┏}; top_inner=${top_inner%┓}; top_spaces=${top_inner//━/ } ;;
         ascii) top_inner=${top_inner#+}; top_inner=${top_inner%+}; top_spaces=${top_inner//-/ } ;;
       esac
-      case "$top_spaces" in
-        *[![:space:]]*) geometry_check=0; geometry_ambiguous=1 ;;
-      esac
+      if [ "$family" = rounded ]; then
+        case "$top_inner" in
+          *'π >'*) content_mode=bottom; geometry_check=0 ;;
+        esac
+      fi
+      if [ "$content_mode" = rows ]; then
+        case "$top_spaces" in
+          *[![:space:]]*) geometry_check=0; geometry_ambiguous=1 ;;
+        esac
+      fi
     elif [ "$kind" = bottom ] || { [ "$kind" = ascii ] && [ "$top" -ge 0 ]; }; then
       if [ "$top" -ge 0 ] && [ "$family" = "$current_family" ] \
-         && [ "$valid" = 1 ] && [ "$content_rows" -gt 0 ] \
+         && [ "$valid" = 1 ] \
+         && { [ "$content_rows" -gt 0 ] || [ "$content_mode" = bottom ]; } \
          && [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; then
         [ "$indent" = "$current_indent" ] || geometry_ambiguous=1
-        if [ "$geometry_check" = 1 ]; then
+        if [ "$content_mode" = bottom ]; then
+          [ "${#trimmed}" -eq "$top_width" ] || geometry_ambiguous=1
+        elif [ "$geometry_check" = 1 ]; then
           bottom_inner=$trimmed
           case "$family" in
             rounded) bottom_inner=${bottom_inner#╰}; bottom_inner=${bottom_inner%╯}; bottom_spaces=${bottom_inner//─/ } ;;
@@ -241,7 +259,7 @@ fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bott
           esac
           [ "$bottom_spaces" = "$top_spaces" ] || geometry_ambiguous=1
         fi
-        printf '%s %s %s' "$top" "$row" "$geometry_ambiguous"
+        printf '%s %s %s %s' "$top" "$row" "$geometry_ambiguous" "$content_mode"
         return 0
       fi
       if { [ "$top" -ge 0 ] && [ "$top" -lt "$cy" ] && [ "$cy" -le "$row" ]; } \
@@ -253,6 +271,7 @@ fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bott
       current_indent=
       valid=0
       content_rows=0
+      content_mode=rows
     elif [ "$top" -ge 0 ]; then
       side_family=
       case "$trimmed" in
@@ -296,6 +315,33 @@ EOF
   return 1
 }
 
+fm_tmux_omp_bottom_row_state() {  # <raw-row> -> empty|pending|unknown
+  local raw=$1 plain stripped
+  plain=$(printf '%s\n' "$raw" | fm_composer_strip_ansi)
+  stripped=$(printf '%s\n' "$raw" | fm_composer_strip_ghost)
+  plain="${plain#"${plain%%[![:space:]]*}"}"
+  plain="${plain%"${plain##*[![:space:]]}"}"
+  stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+  stripped="${stripped%"${stripped##*[![:space:]]}"}"
+  case "$plain:$stripped" in
+    '╰'*'╯:╰'*'╯') ;;
+    *) printf 'unknown'; return 0 ;;
+  esac
+  plain=${plain#╰}; plain=${plain%╯}
+  stripped=${stripped#╰}; stripped=${stripped%╯}
+  case "$plain:$stripped" in
+    '─'*'─:─'*'─') ;;
+    *) printf 'unknown'; return 0 ;;
+  esac
+  plain=${plain#─}; plain=${plain%─}
+  stripped=${stripped#─}; stripped=${stripped%─}
+  plain="${plain#"${plain%%[![:space:]]*}"}"
+  plain="${plain%"${plain##*[![:space:]]}"}"
+  stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+  stripped="${stripped%"${stripped##*[![:space:]]}"}"
+  fm_composer_classify_content 1 "$stripped" "${FM_COMPOSER_IDLE_RE:-}" insensitive "$plain"
+}
+
 # fm_tmux_composer_state classification contract:
 # A row is structural only when its first or last non-whitespace character is a
 # composer edge. A complete box has matching border families and bounded top and
@@ -308,7 +354,7 @@ EOF
 # box, an empty non-bordered fallback row, or the submit core's proven
 # busy-queued Enter conversion.
 fm_tmux_composer_state() {  # <target> -> empty|pending|pending-unproven|unknown
-  local target=$1 cy raw pane plain box box_status top bottom geometry_ambiguous
+  local target=$1 cy raw pane plain box box_status top bottom geometry_ambiguous content_mode
   local row row_raw state unknown_seen=0
   cy=$(tmux display-message -p -t "$target" '#{cursor_y}' 2>/dev/null) || { printf 'unknown'; return 0; }
   case "$cy" in ''|*[!0-9]*) printf 'unknown'; return 0 ;; esac
@@ -318,7 +364,9 @@ fm_tmux_composer_state() {  # <target> -> empty|pending|pending-unproven|unknown
     top=${box%% *}
     box=${box#* }
     bottom=${box%% *}
-    geometry_ambiguous=${box#* }
+    box=${box#* }
+    geometry_ambiguous=${box%% *}
+    content_mode=${box#* }
     row=$((top + 1))
     while [ "$row" -lt "$bottom" ]; do
       row_raw=$(printf '%s\n' "$pane" | sed -n "$((row + 1))p")
@@ -336,6 +384,21 @@ fm_tmux_composer_state() {  # <target> -> empty|pending|pending-unproven|unknown
       esac
       row=$((row + 1))
     done
+    if [ "$content_mode" = bottom ]; then
+      row_raw=$(printf '%s\n' "$pane" | sed -n "$((bottom + 1))p")
+      state=$(fm_tmux_omp_bottom_row_state "$row_raw")
+      case "$state" in
+        pending)
+          if [ "$geometry_ambiguous" = 1 ]; then
+            printf 'pending-unproven'
+          else
+            printf 'pending'
+          fi
+          return 0
+          ;;
+        unknown) unknown_seen=1 ;;
+      esac
+    fi
     if [ "$unknown_seen" = 1 ] || [ "$geometry_ambiguous" = 1 ]; then
       printf 'unknown'
     else

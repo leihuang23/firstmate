@@ -49,12 +49,13 @@ The deeper tmux agent-liveness probe first verifies exact window membership, the
 It classifies recognized Claude, Codex, OpenCode, Grok, and Kimi process names as `alive`, common shells as `dead`, an authoritatively absent window as `missing`, unreadable state as `unreadable`, and every other process as `ambiguous`.
 Only `dead` and `missing` authorize recovery because a false dead result could launch a duplicate agent.
 
-Pi runs through a generic `node` process name and cannot be attributed confidently from the tmux foreground-process field.
-An existing Pi pane is therefore reported as ambiguous rather than auto-healed, while an authoritatively missing Pi window can be relaunched safely.
+Pi runs through a generic `node` process name, and Omp runs through a generic `bun` process name, so neither can be attributed confidently from the tmux foreground-process field.
+An existing Pi or Omp pane is therefore reported as ambiguous rather than auto-healed, while an authoritatively missing window can be relaunched safely.
 This is the active tmux liveness limitation.
 
 Agent liveness and composer safety are separate checks.
 For a bordered composer, the tmux reader locates the complete box structurally and classifies every content row through the shared ANSI and ghost handling in `bin/fm-composer-lib.sh`.
+Omp's verified `╭── π > ...╮` composer is the supported exception whose content lives inside the `╰─ ... ─╯` bottom border row.
 Real text on any content row is pending, while only an unambiguous box with every row empty is proven empty.
 Unreadable, incomplete, or structurally ambiguous boxes fail closed, and panes without a bordered composer retain the compatible cursor-row classification.
 The shared classifier accepts a shell glyph as an empty agent composer only inside a verified bordered composer.
@@ -79,7 +80,7 @@ Ambiguous pending text never receives the busy-queue conversion.
 ## Limits and regression entry points
 
 - tmux is the reference path and supports secondmate homes.
-- Existing Pi agent-process liveness is inconclusive, while an authoritatively missing Pi window can trigger recovery.
+- The active agent-liveness limitations are described in [Current behavior and safety](#current-behavior-and-safety).
 - The OpenCode busy-queue exception is tmux-specific; Herdr retains its separately documented gap.
 
 ```sh

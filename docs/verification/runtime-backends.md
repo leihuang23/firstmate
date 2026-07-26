@@ -31,6 +31,7 @@ A persistent parent shell waiting for a child remained reported as the parent pr
 Claude, Codex, OpenCode, and Grok were observed under their own process names.
 Kimi Code CLI 0.29.1 was observed under `kimi` on 2026-07-25.
 Pi remained a generic `node` process and is intentionally inconclusive.
+Oh My Pi 17.1.3 was observed as a generic `bun` process on 2026-07-26 (the binary is a `#!/usr/bin/env bun` script) and is intentionally inconclusive for the same reason; callers never treat `unknown` as dead.
 
 The structural multi-row composer reader, Kimi pointer-delivery path, and OpenCode 1.18.4 busy-queue behavior are pinned by:
 
