@@ -110,7 +110,7 @@ test_fm_lock_recognizes_omp_holder() {
 #!/usr/bin/env bash
 case "$*" in
   *"comm="*) printf '%s\n' 'bun'; exit 0 ;;
-  *"args="*) printf '%s\n' 'bun /Users/leihuang/.bun/bin/omp --auto-approve'; exit 0 ;;
+  *"args="*) printf '%s\n' 'bun /opt/omp/bin/omp --auto-approve'; exit 0 ;;
 esac
 exit 1
 SH
