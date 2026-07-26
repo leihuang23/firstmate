@@ -13,8 +13,9 @@ The hook fires on every Stop, and an eligible primary with supervision need admi
 A numeric session-lock owner that fails the shared `fm_harness_pid_alive` predicate is reclaimed through `bin/fm-lock.sh` before auto-arm state changes, while a live owner, absent lock, or malformed lock keeps the competing hook inert.
 The stale-owner claim occurs only after the existing AFK and supervision-need gates pass.
 While supervision is still needed and away mode remains inactive, an actionable close or typed failure wakes the idle session through exit 2.
-Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child and starts its successor before delivering the actionable close as a follow-up.
-A rejected follow-up leaves the successor running and writes `state/.omp-watch-delivery-failed`, which stays outside watcher signal scans and is surfaced by the next session-start digest.
+Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child and starts its successor before delivering an actionable close, typed failure, or spawn error as a follow-up.
+Consecutive failure-path successors stop at `FM_WATCH_REARM_RETRY_LIMIT`, and an established watcher resets that chain's budget.
+When restoration succeeds, a rejected follow-up leaves the successor running and writes `state/.omp-watch-delivery-failed`, which stays outside watcher signal scans and is surfaced by the next session-start digest.
 Omp's blockable `session_stop` guard remains a bounded repair backstop and treats both in-flight tasks and X-mode-only relay polling as supervision need.
 
 ## Actionable wake ordering
@@ -60,7 +61,7 @@ Only the watcher process touches `state/.last-watcher-beat`; no helper process c
 `tests/fm-watcher-lock.test.sh` covers verified-successor attach, the typed self-eviction failure, bounded and successor-linked lifecycle rows, and a SIGSTOP counterfactual that distinguishes a live PID from a stale beacon before classifying termination.
 `tests/fm-subagent-pretool-check.test.sh` proves Claude retains only the non-status Bash seatbelts.
 `tests/fm-claude-stop-autoarm.test.sh` covers the auto-arm's scope, stale and live session owners, unchanged AFK and need boundaries, single-flight, and exit-2 translation.
-`tests/fm-omp-watch-extension.test.sh` covers Omp's tracked child, successor-first actionable follow-up, rejected-delivery persistence, lock ownership, direct guard continuation, X-mode-only supervision, and one-shot latch.
+`tests/fm-omp-watch-extension.test.sh` covers Omp's tracked child, successor-first actionable and failure follow-ups, capped spawn-error restarts, rejected-delivery persistence, lock ownership, direct guard continuation, X-mode-only supervision, and one-shot latch.
 `FM_CLAUDE_LIVE_E2E=1 tests/fm-claude-stop-autoarm-live-e2e.test.sh` starts with the reproduced stale-lock state, runs session start first, completes two tokenless cycles, and checks the competing-live-owner negative control.
 `tests/fm-turnend-guard.test.sh` covers the cooperative `--claude` guard.
 

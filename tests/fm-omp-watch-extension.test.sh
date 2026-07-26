@@ -36,6 +36,7 @@ test_tracked_extensions_present_and_self_hashing() {
   assert_contains "$text" "sendUserMessage" "tracked watcher extension missing omp wake API"
   assert_contains "$text" 'encodeFirstmateOperationalInput(' "tracked watcher extension does not use the canonical operational-input encoder"
   assert_contains "$text" 'deliverAs: "followUp"' "tracked watcher extension missing followUp delivery"
+  assert_contains "$text" 'FM_WATCH_REARM_RETRY_LIMIT' "tracked watcher extension missing bounded failure-path restarts"
   assert_contains "$text" ".omp-watch-delivery-failed" "tracked watcher extension missing durable delivery-failure marker"
   assert_contains "$text" ".omp-watch-extension-loaded" "tracked watcher extension missing loaded marker"
   assert_contains "$text" 'createHash("sha256").update(readFileSync(extensionFile)).digest("hex")' "watcher extension does not self-hash its own content for extensionVersion"
@@ -200,7 +201,7 @@ while :; do sleep 0.05; done
 SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
   out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" node --input-type=module 2>&1 <<'EOF'
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 let tool = null;
@@ -244,6 +245,144 @@ EOF
   out=$(FM_STATE_OVERRIDE="$home/state" bash -c '. "$1/bin/fm-watch.sh"; scan_signals' _ "$ROOT")
   [ -z "$out" ] || fail "omp delivery-failure marker retriggered the watcher signal scan: $out"
   pass "omp delivery rejection preserves successor supervision and durable failure state"
+}
+
+test_omp_typed_failure_starts_successor_before_rejected_delivery() {
+  local repo home plugin log out status
+  repo="$TMP_ROOT/omp-typed-failure-root"
+  home="$TMP_ROOT/omp-typed-failure-home"
+  log="$home/arm.log"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-omp-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s predecessor=%s\n' "$$" "${FM_WATCH_PREDECESSOR_ARM_PID:-none}" >> "${FM_ARM_LOG:?}"
+if [ "$(wc -l < "$FM_ARM_LOG" | tr -d '[:space:]')" -eq 1 ]; then
+  printf 'watcher: FAILED - synthetic typed arm failure\n'
+  exit 7
+fi
+trap 'exit 0' TERM INT
+while :; do sleep 0.05; done
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_WATCH_REARM_RETRY_LIMIT=2 node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+let tool = null;
+const pi = {
+  on() {},
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_omp") tool = candidate;
+  },
+  sendUserMessage: async () => {
+    throw new Error("synthetic typed-failure delivery rejection");
+  },
+  zod: { object: (properties) => ({ type: "object", properties }) },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("tool-call-typed-failure", {}, undefined, undefined, {});
+const markerPath = `${process.env.FM_HOME}/state/.omp-watch-delivery-failed`;
+for (let i = 0; i < 500; i += 1) {
+  const rows = existsSync(process.env.FM_ARM_LOG)
+    ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n")
+    : [];
+  if (rows.length >= 2 && existsSync(markerPath)) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+const rows = readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n");
+if (rows.length !== 2) throw new Error(`typed arm failure did not start exactly one successor: ${rows.length}`);
+if (!/predecessor=[0-9]+/.test(rows[1])) throw new Error(`typed-failure successor lacks predecessor identity: ${rows[1]}`);
+const marker = readFileSync(markerPath, "utf8");
+if (!marker.includes("synthetic typed arm failure")) throw new Error(`marker lost typed arm failure: ${marker}`);
+if (!marker.includes("synthetic typed-failure delivery rejection")) throw new Error(`marker lost delivery rejection: ${marker}`);
+await new Promise((resolve) => setTimeout(resolve, 100));
+const stableRows = readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n");
+if (stableRows.length !== 2) throw new Error(`typed failure duplicated successor arms: ${stableRows.length}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp typed arm failures must start a successor before rejected delivery"
+  [ -z "$out" ] || fail "omp typed-failure successor test printed output: $out"
+  pass "omp typed arm failures preserve successor supervision before delivery"
+}
+
+test_omp_spawn_errors_retry_with_cap() {
+  local repo home plugin out status
+  repo="$TMP_ROOT/omp-spawn-error-root"
+  home="$TMP_ROOT/omp-spawn-error-home"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-omp-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_WATCH_REARM_RETRY_LIMIT=2 node --input-type=module 2>&1 <<'EOF'
+import { EventEmitter } from "node:events";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire, syncBuiltinESMExports } from "node:module";
+import { PassThrough } from "node:stream";
+import { pathToFileURL } from "node:url";
+
+let tool = null;
+let deliveries = 0;
+let spawns = 0;
+const require = createRequire(import.meta.url);
+const childProcessModule = require("node:child_process");
+const realSpawn = childProcessModule.spawn;
+childProcessModule.spawn = () => {
+  spawns += 1;
+  const child = new EventEmitter();
+  child.pid = 1000 + spawns;
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = () => true;
+  process.nextTick(() => child.emit("error", new Error("synthetic spawn failure")));
+  return child;
+};
+syncBuiltinESMExports();
+const pi = {
+  on() {},
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_omp") tool = candidate;
+  },
+  sendUserMessage: async () => {
+    deliveries += 1;
+    throw new Error("synthetic spawn-error delivery rejection");
+  },
+  zod: { object: (properties) => ({ type: "object", properties }) },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+const armResult = await tool.execute("tool-call-spawn-error", {}, undefined, undefined, {});
+const markerPath = `${process.env.FM_HOME}/state/.omp-watch-delivery-failed`;
+for (let i = 0; i < 500 && (spawns < 3 || deliveries < 3 || !existsSync(markerPath)); i += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+childProcessModule.spawn = realSpawn;
+syncBuiltinESMExports();
+if (spawns !== 3) throw new Error(`spawn-error restarts were not capped at two: ${spawns}; arm=${JSON.stringify(armResult)}`);
+if (deliveries !== 3) throw new Error(`spawn-error restarts were not capped at two: ${deliveries}; arm=${JSON.stringify(armResult)}`);
+const marker = readFileSync(markerPath, "utf8");
+if (!marker.includes("failed: synthetic spawn failure")) throw new Error(`marker lost spawn error: ${marker}`);
+if (!marker.includes("synthetic spawn-error delivery rejection")) throw new Error(`marker lost spawn delivery rejection: ${marker}`);
+await new Promise((resolve) => setTimeout(resolve, 100));
+if (deliveries !== 3) throw new Error(`spawn-error delivery loop exceeded cap: ${deliveries}`);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp spawn errors must retry with a bounded successor cap; output: $out"
+  [ -z "$out" ] || fail "omp spawn-error cap test printed output: $out"
+  pass "omp spawn errors preserve bounded successor retries"
 }
 
 test_omp_arm_distinguishes_session_lock_ownership() {
@@ -556,6 +695,8 @@ test_tracked_extensions_present_and_self_hashing
 test_omp_tool_returns_agent_tool_result
 test_omp_wake_uses_canonical_watcher_input
 test_omp_delivery_rejection_keeps_successor_and_status
+test_omp_typed_failure_starts_successor_before_rejected_delivery
+test_omp_spawn_errors_retry_with_cap
 test_omp_arm_distinguishes_session_lock_ownership
 test_omp_guard_session_stop_continue_and_latch
 test_omp_guard_session_stop_blocks_x_mode_only

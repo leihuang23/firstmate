@@ -25,9 +25,18 @@ const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
 const deliveryFailureMarker = `${state}/.omp-watch-delivery-failed`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
+const retryLimit = positiveInteger("FM_WATCH_REARM_RETRY_LIMIT", 5);
 
 let child: ChildProcess | null = null;
 let seq = 0;
+let stopping = false;
+let deliverySeq = 0;
+
+function positiveInteger(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.floor(value);
+}
 
 function parentPid(pid: string): string {
   const result = spawnSync("ps", ["-o", "ppid=", "-p", pid], { encoding: "utf8" });
@@ -84,6 +93,7 @@ function failureLine(stdout: string, stderr: string, code: number | null): strin
 
 export default function (pi: ExtensionAPI) {
   function stopArm(): void {
+    stopping = true;
     child?.kill("SIGTERM");
     child = null;
   }
@@ -94,22 +104,35 @@ export default function (pi: ExtensionAPI) {
   process.once("exit", cleanupOnProcessExit);
 
   async function sendWake(message: string): Promise<void> {
+    const deliveryId = ++deliverySeq;
     const content = encodeFirstmateOperationalInput(
       "watcher",
       `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
     );
     try {
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
-      rmSync(deliveryFailureMarker, { force: true });
+      if (deliveryId === deliverySeq) rmSync(deliveryFailureMarker, { force: true });
     } catch (error) {
-      mkdirSync(state, { recursive: true });
-      const detail = error instanceof Error ? error.message : String(error);
-      writeFileSync(deliveryFailureMarker, `watcher: FAILED - omp wake delivery rejected: ${detail}\n`);
+      if (deliveryId === deliverySeq) {
+        mkdirSync(state, { recursive: true });
+        const detail = error instanceof Error ? error.message : String(error);
+        writeFileSync(deliveryFailureMarker, `${message}\n\nwatcher: FAILED - omp wake delivery rejected: ${detail}\n`);
+      }
       throw error;
     }
   }
 
-  function startArm(predecessorArmPid = ""): ArmResult {
+  function startFailureSuccessor(message: string, predecessorArmPid: string, failureAttempt: number): string {
+    if (failureAttempt >= retryLimit) {
+      return `${message}\n\nwatcher: FAILED - omp extension could not restore watcher continuity after ${retryLimit} retries`;
+    }
+    const successor = startArm(predecessorArmPid, failureAttempt + 1);
+    if (successor.ok) return message;
+    return `${message}\n\nwatcher: FAILED - omp extension could not start a bounded successor watcher cycle\n${successor.message}`;
+  }
+
+  function startArm(predecessorArmPid = "", failureAttempt = 0): ArmResult {
+    if (stopping) return { ok: false, message: "watcher: not armed - omp session is shutting down" };
     const ownership = lockOwnership();
     if (ownership === "other") return { ok: false, message: "watcher: read-only - session lock is held by another firstmate session" };
     if (ownership === "missing") {
@@ -138,25 +161,34 @@ export default function (pi: ExtensionAPI) {
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let established = false;
+    const observeEstablishedArm = (): void => {
+      if (/^watcher: (?:started|attached)\b/m.test(`${stdout}\n${stderr}`)) established = true;
+    };
     armChild.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
+      observeEstablishedArm();
     });
     armChild.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
+      observeEstablishedArm();
     });
     armChild.on("close", (code: number | null) => {
       if (settled) return;
       settled = true;
       if (child === armChild) child = null;
+      if (stopping) return;
       const reason = actionableLine(`${stdout}\n${stderr}`);
       const failure = reason ? "" : failureLine(stdout, stderr, code);
       if (!reason && !failure) return;
       let message = reason || failure;
       if (reason) {
-        const successor = startArm(String(armChild.pid ?? ""));
+        const successor = startArm(String(armChild.pid ?? ""), 0);
         if (!successor.ok) {
           message += `\n\nwatcher: FAILED - omp extension could not start a successor watcher cycle\n${successor.message}`;
         }
+      } else {
+        message = startFailureSuccessor(message, String(armChild.pid ?? ""), established ? 0 : failureAttempt);
       }
       void sendWake(message).catch(() => {});
     });
@@ -164,7 +196,13 @@ export default function (pi: ExtensionAPI) {
       if (settled) return;
       settled = true;
       if (child === armChild) child = null;
-      void sendWake(`watcher: FAILED - omp extension arm child ${id} failed: ${error.message}`).catch(() => {});
+      if (stopping) return;
+      const message = startFailureSuccessor(
+        `watcher: FAILED - omp extension arm child ${id} failed: ${error.message}`,
+        String(armChild.pid ?? ""),
+        failureAttempt,
+      );
+      void sendWake(message).catch(() => {});
     });
     return { ok: true, message: `watcher: started omp extension arm child ${id}` };
   }
