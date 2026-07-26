@@ -187,7 +187,7 @@ fm_tmux_find_composer_box() {  # <cursor-y> <plain-visible-pane> -> "<top> <bott
   local cy=$1 pane=$2 line indent left_stripped trimmed kind family current_family=
   local side_family top_inner top_spaces='' geometry_check=0 geometry_ambiguous=0
   local content_inner content_spaces bottom_inner bottom_spaces
-  local current_indent= content_mode=rows top_width=0
+  local current_indent='' content_mode=rows top_width=0
   local row=0 top=-1 valid=0 content_rows=0 unsafe=0 cursor_structural=0
   while IFS= read -r line; do
     indent=${line%%[![:space:]]*}
