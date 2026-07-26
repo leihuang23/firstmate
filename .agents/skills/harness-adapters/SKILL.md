@@ -426,6 +426,6 @@ The PreToolUse seatbelts ride the same extension's `tool_call` handler, returnin
 Every non-bash `tool_call` name routes through `bin/fm-subagent-pretool-check.sh --tool` in the same handler, so an omp primary cannot launch untracked work through the built-in `task` tool (verified live 2026-07-26: a real `task` call was denied with the verbatim `[subagent-dispatch]` message).
 The session-start nudge rides the extension's `session_start` handler through `pi.sendMessage` with `display: false` (verified live: the injected nudge reached the model and was obeyed).
 The watcher bridge registers the `fm_watch_arm_omp` tool and `/fm-watch-arm-omp` command and owns the `bin/fm-watch-arm.sh --restart` child, sending a follow-up user message on an actionable wake (verified live, including the read-only refusal when another live session holds the lock).
-It starts the successor arm before actionable or failure delivery, caps consecutive typed-failure and spawn-error restarts through `FM_WATCH_REARM_RETRY_LIMIT`, and records a rejected follow-up in `state/.omp-watch-delivery-failed` outside watcher signal scans for session-start surfacing.
+[`docs/watcher-continuity.md`](../../../docs/watcher-continuity.md) owns the successor-before-wake ordering, bounded failure retries, stability reset, and rejected-delivery persistence contract.
 The `session_stop` guard counts both task metadata and X-mode-only relay polling as supervision need.
 Headless `omp -p` runs the same extensions and events; interactive TUI is the supported primary supervision host.

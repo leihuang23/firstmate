@@ -13,8 +13,9 @@ The hook fires on every Stop, and an eligible primary with supervision need admi
 A numeric session-lock owner that fails the shared `fm_harness_pid_alive` predicate is reclaimed through `bin/fm-lock.sh` before auto-arm state changes, while a live owner, absent lock, or malformed lock keeps the competing hook inert.
 The stale-owner claim occurs only after the existing AFK and supervision-need gates pass.
 While supervision is still needed and away mode remains inactive, an actionable close or typed failure wakes the idle session through exit 2.
-Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child and starts its successor before delivering an actionable close, typed failure, or spawn error as a follow-up.
-Consecutive failure-path successors stop at `FM_WATCH_REARM_RETRY_LIMIT`.
+Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child.
+After an actionable close it attempts one successor before delivering the follow-up.
+After a typed failure or spawn error it attempts a successor before delivery only while below `FM_WATCH_REARM_RETRY_LIMIT`.
 An actionable close resets the budget immediately, while the first verified `watcher: started` or `watcher: attached` output starts a monotonic stability clock and resets it only after the arm remains alive for `FM_OMP_WATCH_STABLE_MS` (30 seconds by default).
 When restoration succeeds, a rejected follow-up leaves the successor running and writes `state/.omp-watch-delivery-failed`, which stays outside watcher signal scans and is surfaced by the next session-start digest.
 Omp's blockable `session_stop` guard remains a bounded repair backstop and treats both in-flight tasks and X-mode-only relay polling as supervision need.
@@ -74,4 +75,4 @@ OpenCode support targets persistent TUI sessions rather than headless `opencode 
 Omp uses successor-before-wake restoration plus its blockable `session_stop` continuation.
 Claude depends on the Stop `asyncRewake` rewake, Grok retains native background-completion notifications, and Codex retains bounded foreground checkpoints.
 
-[`verification/supervision.md`](verification/supervision.md#watcher-continuity) records the current five-harness live evidence, the 2026-07-24 Stop-owned Claude auto-arm results, and exact opt-in commands.
+[`verification/supervision.md`](verification/supervision.md#watcher-continuity) records the current five-harness live evidence, Omp's deterministic successor coverage, the 2026-07-24 Stop-owned Claude auto-arm results, and exact opt-in commands.

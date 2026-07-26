@@ -80,7 +80,7 @@ Ambiguous pending text never receives the busy-queue conversion.
 ## Limits and regression entry points
 
 - tmux is the reference path and supports secondmate homes.
-- Existing Pi agent-process liveness is inconclusive, while an authoritatively missing Pi window can trigger recovery.
+- The active agent-liveness limitations are described in [Current behavior and safety](#current-behavior-and-safety).
 - The OpenCode busy-queue exception is tmux-specific; Herdr retains its separately documented gap.
 
 ```sh

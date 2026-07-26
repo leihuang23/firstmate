@@ -139,6 +139,7 @@ tests/fm-watcher-lock.test.sh
 tests/fm-subagent-pretool-check.test.sh
 tests/fm-claude-stop-autoarm.test.sh
 tests/fm-turnend-guard.test.sh
+tests/fm-omp-watch-extension.test.sh
 ```
 
 ## Wedge-alarm channels
