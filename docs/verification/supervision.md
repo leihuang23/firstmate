@@ -60,6 +60,7 @@ Current deterministic and live entry points:
 ```sh
 tests/fm-sessionstart-nudge.test.sh
 tests/fm-captain-translation-contract.test.sh
+tests/fm-omp-watch-extension.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
 FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh
 ```
@@ -70,7 +71,7 @@ The detailed reconciliation and task chronology stay in the private audit report
 
 ## Turn-end guard
 
-The direct and passive mechanisms were validated across all five harnesses on 2026-07-08 through 2026-07-12, with Claude's replacement Stop-owned path revalidated on 2026-07-24 and the omp integration validated on 2026-07-26.
+The direct and passive mechanisms were validated across all six harnesses on 2026-07-08 through 2026-07-26, with Claude's replacement Stop-owned path revalidated on 2026-07-24 and the Omp integration validated on 2026-07-26.
 
 | Harness | Version verified | Mechanism | Observed result |
 | --- | --- | --- | --- |
@@ -103,6 +104,7 @@ Current entry points:
 ```sh
 tests/fm-turnend-guard.test.sh
 tests/fm-supervision-instructions.test.sh
+tests/fm-omp-watch-extension.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
 ```
 

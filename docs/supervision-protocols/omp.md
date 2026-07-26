@@ -16,9 +16,3 @@ When this session owns supervision and away mode is not active:
 The turn-end guard extension lives at `__FM_OMP_TURNEND_EXT__`.
 The watcher extension lives at `__FM_OMP_EXT__`.
 Both are tracked, project-local `.omp/extensions/*.ts` files that omp auto-discovers with no trust gate; `bin/fm-session-start.sh` reports when the running omp session has not loaded both required extensions.
-
-Verification on 2026-07-26 used omp 17.1.3 in a scratch project (`/tmp/omp-lab`), print mode and an interactive TUI on the dedicated tmux socket `fm-omp-lab`.
-The event probe confirmed `session_start`, `turn_end`, `session_stop`, `agent_end`, and `session_shutdown` fire, and that `.omp/extensions/*.ts` and explicit `-e` paths load with no trust dialog.
-`session_stop` returning `{ continue: true, additionalContext }` forced one continuation turn in print mode.
-`tool_call` returning `{ block: true, reason }` prevented a bash command from executing.
-The interactive positional prompt started a turn immediately, single Escape interrupted a live turn, and `/quit` exited cleanly.

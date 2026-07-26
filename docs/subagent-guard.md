@@ -176,6 +176,7 @@ Applicability turns on one question: does the harness expose built-in delegation
 | Grok | present, exact tokens unconfirmed | Not wired pending live verification. See below. |
 | OpenCode | present, exact tokens unconfirmed | Not wired pending live verification. See below. |
 | Pi | none reported | Not wired pending live verification. See below. |
+| Omp | `task` | Not wired. Omp 17.1.3 advertises `task` as a default-enabled tool that launches sub-agents, while the tracked extension currently applies its `tool_call` guard only to `bash`. |
 
 ### Codex, verified not applicable
 
@@ -231,6 +232,12 @@ Wiring an unvalidated matcher would trade a known gap for an unknown breakage.
 The bounded follow-up for each is identical to the Codex procedure above.
 On a host with the binary installed, ask the harness to enumerate its tools, then wire the matcher and re-run the live matrix below.
 `bin/fm-subagent-pretool-check.sh` needs no change for any of them: it already accepts Grok's stdin shape and the `--tool` CLI form OpenCode and Pi use, and it already emits the Grok stdout decision object by default.
+
+### Omp, verified gap
+
+`omp --help` on Omp 17.1.3 lists `task` as a default-enabled tool that launches sub-agents.
+The tracked `.omp/extensions/fm-primary-turnend-guard.ts` receives `tool_call` events but returns immediately for every tool except `bash`, so an Omp primary can create work with no Firstmate task metadata.
+The adapter must route the exact `task` tool name through `bin/fm-subagent-pretool-check.sh` and be live-validated before Omp satisfies this guard contract.
 
 ## Live validation record, 2026-07-22
 

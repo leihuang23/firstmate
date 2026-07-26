@@ -49,7 +49,7 @@ If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot s
 
 Claude and Codex can block a Stop directly with exit status 2 and stderr.
 Both payloads carry `stop_hook_active`.
-Omp can block a stop directly through its `session_stop` extension event: the tracked guard extension returns `{ continue: true, additionalContext }` when the shared predicate exits 2, forcing one continuation turn (verified 2026-07-26 on omp 17.1.3).
+Omp can block a stop directly through its `session_stop` extension event: the tracked guard extension returns `{ continue: true, additionalContext }` when the shared predicate exits 2, forcing one continuation turn.
 In the default Codex mode, a true value lets the second stop finish after one forced continuation.
 Omp's extension latch mirrors that contract: the forced continuation's own stop is allowed exactly once, and omp caps consecutive continuations at 8.
 
