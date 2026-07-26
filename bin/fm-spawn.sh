@@ -1362,6 +1362,10 @@ EOF
       # omp has no project-trust gate for extensions (verified 2026-07-26 on
       # 17.1.3), but the explicit -e path lives in state/ anyway so the worktree
       # stays pristine and teardown owns cleanup, same shape as pi.
+      if ! omp_turnend_literal=$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$TURNEND"); then
+        echo "error: could not encode the omp turn-end path" >&2
+        exit 1
+      fi
       cat > "$STATE/$ID.omp-ext.ts" <<EOF
 // Firstmate turn-end signal; written by fm-spawn.
 // Use "turn_end" (fires after each turn the agent finishes), not "agent_end"
@@ -1369,7 +1373,7 @@ EOF
 // every turn boundary so an idle crewmate is surfaced, not just at shutdown.
 import { execFile } from "node:child_process";
 export default function (pi: any) {
-  pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
+  pi.on("turn_end", () => execFile("touch", [$omp_turnend_literal]));
 }
 EOF
       ;;

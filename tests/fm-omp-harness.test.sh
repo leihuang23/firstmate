@@ -80,6 +80,36 @@ EOF
   pass "omp spawn writes the turn-end extension and launches with --auto-approve"
 }
 
+test_omp_turnend_extension_encodes_special_state_path() {
+  local case_dir home proj wt fakebin id log out status extension literal decoded expected
+  case_dir="$TMP_ROOT/turnend-literal"
+  home="$case_dir/home\"slash\\line
+break"
+  proj="$case_dir/project"
+  wt="$case_dir/wt"
+  fakebin=$(make_spawn_fakebin "$case_dir/fake")
+  id="omp-turnend-literal-x1"
+  log="$case_dir/tmux.log"
+  mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config"
+  printf 'brief\n' > "$home/data/$id/brief.md"
+  fm_git_worktree "$proj" "$wt" "fm/$id"
+  touch "$home/state/.last-watcher-beat"
+
+  out=$(run_omp_spawn "$home" "$proj" "$wt" "$fakebin" "$id" "$log" omp)
+  status=$?
+  expect_code 0 "$status" "omp spawn with a special state path should succeed"
+  extension="$home/state/$id.omp-ext.ts"
+  assert_present "$extension" "omp turn-end extension was not written for a special state path"
+  literal=$(sed -n 's/.*execFile("touch", \[\(.*\)\]));/\1/p' "$extension")
+  [ -n "$literal" ] || fail "omp turn-end extension did not contain a path literal"
+  decoded=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]))' "$literal") \
+    || fail "omp turn-end extension path is not a valid JavaScript string literal"
+  expected="$(cd "$home/state" && pwd -P)/$id.turn-ended"
+  [ "$decoded" = "$expected" ] \
+    || fail "omp turn-end extension path changed during encoding"
+  pass "omp spawn safely encodes special characters in the turn-end path"
+}
+
 test_omp_teardown_removes_extension() {
   local rec case_dir home proj wt fakebin id out status log
   rec=$(make_spawn_case teardown)
@@ -192,6 +222,7 @@ test_omp_secondmate_template_loads_primary_extensions() {
 }
 
 test_omp_spawn_writes_turnend_extension_and_launches
+test_omp_turnend_extension_encodes_special_state_path
 test_omp_teardown_removes_extension
 test_fm_lock_recognizes_omp_holder
 test_fm_lock_omp_args_do_not_self_match_config_paths
