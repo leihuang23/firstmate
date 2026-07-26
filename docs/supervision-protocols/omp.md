@@ -7,7 +7,7 @@ When this session owns supervision and away mode is not active:
    Use `/fm-watch-arm-omp` only as a human-entered fallback.
    Never run `bin/fm-watch-arm.sh` through omp's bash tool because that foreground arm can wedge the agent and bypasses extension-owned cleanup.
 4. If the extension says no live session holds the lock, run `bin/fm-session-start.sh` to reclaim the session lock, then call `fm_watch_arm_omp` again.
-5. The extension starts `bin/fm-watch-arm.sh --restart`, keeps the child attached to the live omp process, starts the successor cycle before delivering an actionable wake, and records a rejected delivery in `state/omp-watch-delivery.status`.
+5. The extension starts `bin/fm-watch-arm.sh --restart`, keeps the child attached to the live omp process, starts the successor cycle before delivering an actionable wake, and records a rejected delivery in `state/.omp-watch-delivery-failed` for the next session-start digest.
 6. After handling that wake, leave the successor cycle running; [`watcher-continuity.md`](../watcher-continuity.md) owns the ordering and residual active-turn limit.
 7. If the extension says it already owns an arm child, do not start another cycle.
 8. If the extension reports a watcher failure, drain queued wakes, inspect the failure text, and restart omp with both extensions loaded if needed.

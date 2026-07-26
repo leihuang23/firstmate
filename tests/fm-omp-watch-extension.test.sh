@@ -36,7 +36,7 @@ test_tracked_extensions_present_and_self_hashing() {
   assert_contains "$text" "sendUserMessage" "tracked watcher extension missing omp wake API"
   assert_contains "$text" 'encodeFirstmateOperationalInput(' "tracked watcher extension does not use the canonical operational-input encoder"
   assert_contains "$text" 'deliverAs: "followUp"' "tracked watcher extension missing followUp delivery"
-  assert_contains "$text" "omp-watch-delivery.status" "tracked watcher extension missing durable delivery-failure status"
+  assert_contains "$text" ".omp-watch-delivery-failed" "tracked watcher extension missing durable delivery-failure marker"
   assert_contains "$text" ".omp-watch-extension-loaded" "tracked watcher extension missing loaded marker"
   assert_contains "$text" 'createHash("sha256").update(readFileSync(extensionFile)).digest("hex")' "watcher extension does not self-hash its own content for extensionVersion"
   assert_contains "$text" 'fileURLToPath(import.meta.url)' "watcher extension does not self-locate via import.meta.url"
@@ -219,7 +219,7 @@ writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
 const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
 await tool.execute("tool-call-rejection", {}, undefined, undefined, {});
-const statusPath = `${process.env.FM_HOME}/state/omp-watch-delivery.status`;
+const statusPath = `${process.env.FM_HOME}/state/.omp-watch-delivery-failed`;
 for (let i = 0; i < 500; i += 1) {
   const rows = existsSync(process.env.FM_ARM_LOG)
     ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n")
@@ -241,6 +241,8 @@ EOF
   status=$?
   expect_code 0 "$status" "omp delivery rejection must preserve successor supervision and durable failure state"
   [ -z "$out" ] || fail "omp delivery-rejection test printed output: $out"
+  out=$(FM_STATE_OVERRIDE="$home/state" bash -c '. "$1/bin/fm-watch.sh"; scan_signals' _ "$ROOT")
+  [ -z "$out" ] || fail "omp delivery-failure marker retriggered the watcher signal scan: $out"
   pass "omp delivery rejection preserves successor supervision and durable failure state"
 }
 
@@ -335,6 +337,19 @@ if (!String(first.additionalContext).includes("GUARD-REASON")) {
   throw new Error(`missing guard stderr: ${first.additionalContext}`);
 }
 
+const second = await handlers.session_stop();
+if (second?.continue) throw new Error("the forced continuation's own stop must be allowed (latch)");
+
+const third = await handlers.session_stop();
+if (third?.continue !== true) throw new Error("guard must block again after the latch clears");
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp guard must continue once on a blocking guard, then latch"
+  [ -z "$out" ] || fail "omp guard session_stop test printed output: $out"
+  pass "omp guard session_stop continues once and latches"
+}
+
 test_omp_guard_session_stop_blocks_x_mode_only() {
   local repo home plugin out status
   repo="$TMP_ROOT/omp-guard-x-root"
@@ -374,19 +389,6 @@ EOF
   expect_code 0 "$status" "omp session_stop must request total-supervision guard mode for X-mode-only homes"
   [ -z "$out" ] || fail "omp X-mode session_stop test printed output: $out"
   pass "omp session_stop blocks X-mode-only blind turns"
-}
-
-const second = await handlers.session_stop();
-if (second?.continue) throw new Error("the forced continuation's own stop must be allowed (latch)");
-
-const third = await handlers.session_stop();
-if (third?.continue !== true) throw new Error("guard must block again after the latch clears");
-EOF
-)
-  status=$?
-  expect_code 0 "$status" "omp guard must continue once on a blocking guard, then latch"
-  [ -z "$out" ] || fail "omp guard session_stop test printed output: $out"
-  pass "omp guard session_stop continues once and latches"
 }
 
 test_omp_guard_tool_call_blocks_on_seatbelt_deny() {

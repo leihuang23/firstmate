@@ -14,7 +14,7 @@ A numeric session-lock owner that fails the shared `fm_harness_pid_alive` predic
 The stale-owner claim occurs only after the existing AFK and supervision-need gates pass.
 While supervision is still needed and away mode remains inactive, an actionable close or typed failure wakes the idle session through exit 2.
 Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child and starts its successor before delivering the actionable close as a follow-up.
-A rejected follow-up leaves the successor running and writes `state/omp-watch-delivery.status`, which the watcher and next session-start digest can surface.
+A rejected follow-up leaves the successor running and writes `state/.omp-watch-delivery-failed`, which stays outside watcher signal scans and is surfaced by the next session-start digest.
 Omp's blockable `session_stop` guard remains a bounded repair backstop and treats both in-flight tasks and X-mode-only relay polling as supervision need.
 
 ## Actionable wake ordering

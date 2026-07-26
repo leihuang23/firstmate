@@ -23,7 +23,7 @@ const state = process.env.FM_STATE_OVERRIDE || `${fmHome}/state`;
 const config = process.env.FM_CONFIG_OVERRIDE || `${fmHome}/config`;
 const armScript = `${fmRoot}/bin/fm-watch-arm.sh`;
 const marker = `${state}/.omp-watch-extension-loaded`;
-const deliveryFailureStatus = `${state}/omp-watch-delivery.status`;
+const deliveryFailureMarker = `${state}/.omp-watch-delivery-failed`;
 const extensionVersion = `sha256:${createHash("sha256").update(readFileSync(extensionFile)).digest("hex")}`;
 
 let child: ChildProcess | null = null;
@@ -100,11 +100,11 @@ export default function (pi: ExtensionAPI) {
     );
     try {
       await pi.sendUserMessage(content, { deliverAs: "followUp" });
-      rmSync(deliveryFailureStatus, { force: true });
+      rmSync(deliveryFailureMarker, { force: true });
     } catch (error) {
       mkdirSync(state, { recursive: true });
       const detail = error instanceof Error ? error.message : String(error);
-      writeFileSync(deliveryFailureStatus, `watcher: FAILED - omp wake delivery rejected: ${detail}\n`);
+      writeFileSync(deliveryFailureMarker, `watcher: FAILED - omp wake delivery rejected: ${detail}\n`);
       throw error;
     }
   }

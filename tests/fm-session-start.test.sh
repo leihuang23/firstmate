@@ -886,6 +886,26 @@ EOF
   pass "orphan status logs are printed once with bounded tails"
 }
 
+test_omp_delivery_failure_marker_is_surfaced() {
+  local rec root home fakebin out marker
+  rec=$(new_world omp-delivery-failure)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" omp
+  marker="$home/state/.omp-watch-delivery-failed"
+  printf 'watcher: FAILED - omp wake delivery rejected: synthetic\n' > "$marker"
+
+  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  assert_contains "$out" "Omp watcher delivery failure" "session-start digest omitted the Omp delivery-failure section"
+  assert_contains "$out" "watcher: FAILED - omp wake delivery rejected: synthetic" "session-start digest omitted the Omp delivery failure"
+  assert_contains "$out" "$marker" "session-start digest omitted the full delivery-failure marker path"
+  assert_not_contains "$out" "--- omp-watch-delivery ---" "delivery failure leaked into the watched orphan-status namespace"
+  pass "session start surfaces Omp delivery failures outside watcher signals"
+}
+
 # --- session-start secondmate recovery boundary -----------------------------
 
 test_session_start_relaunches_missing_pi_secondmate() {
@@ -1424,6 +1444,7 @@ test_session_start_preserves_proven_bare_shell_recovery
 test_session_start_relaunches_herdr_husk_secondmate
 test_status_tail_bounding
 test_orphan_status_logs_are_printed
+test_omp_delivery_failure_marker_is_surfaced
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts

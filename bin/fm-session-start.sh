@@ -402,6 +402,15 @@ for status in "$STATE"/*.status; do
 done
 [ "$ORPHAN_STATUS_FOUND" -eq 1 ] || printf '(none)\n'
 
+subsection "Omp watcher delivery failure"
+OMP_DELIVERY_FAILURE="$STATE/.omp-watch-delivery-failed"
+if [ -f "$OMP_DELIVERY_FAILURE" ]; then
+  printf 'present (full marker: %s):\n' "$OMP_DELIVERY_FAILURE"
+  tail -n "$STATUS_TAIL" "$OMP_DELIVERY_FAILURE"
+else
+  printf '(none)\n'
+fi
+
 subsection "AFK"
 if [ -e "$STATE/.afk" ]; then
   printf 'present - away-mode supervision is active; the daemon owns the watcher.\n'
