@@ -159,13 +159,14 @@ export default function (pi: ExtensionAPI) {
       stdio: ["ignore", "pipe", "pipe"],
     });
     child = armChild;
-    const startedAt = Date.now();
     let stdout = "";
     let stderr = "";
     let settled = false;
-    let established = false;
+    let readinessAt: bigint | null = null;
     const observeEstablishedArm = (): void => {
-      if (/^watcher: (?:started|attached)\b/m.test(`${stdout}\n${stderr}`)) established = true;
+      if (readinessAt === null && /^watcher: (?:started|attached)\b/m.test(`${stdout}\n${stderr}`)) {
+        readinessAt = process.hrtime.bigint();
+      }
     };
     armChild.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
@@ -190,7 +191,8 @@ export default function (pi: ExtensionAPI) {
           message += `\n\nwatcher: FAILED - omp extension could not start a successor watcher cycle\n${successor.message}`;
         }
       } else {
-        const stable = established && Date.now() - startedAt >= stableCycleMs;
+        const stable =
+          readinessAt !== null && process.hrtime.bigint() - readinessAt >= BigInt(stableCycleMs) * 1_000_000n;
         message = startFailureSuccessor(message, String(armChild.pid ?? ""), stable ? 0 : failureAttempt);
       }
       void sendWake(message).catch(() => {});

@@ -15,7 +15,7 @@ The stale-owner claim occurs only after the existing AFK and supervision-need ga
 While supervision is still needed and away mode remains inactive, an actionable close or typed failure wakes the idle session through exit 2.
 Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child and starts its successor before delivering an actionable close, typed failure, or spawn error as a follow-up.
 Consecutive failure-path successors stop at `FM_WATCH_REARM_RETRY_LIMIT`.
-An actionable close resets the budget immediately, while `watcher: started` or `watcher: attached` resets it only after the arm remains alive for `FM_OMP_WATCH_STABLE_MS` (30 seconds by default).
+An actionable close resets the budget immediately, while the first verified `watcher: started` or `watcher: attached` output starts a monotonic stability clock and resets it only after the arm remains alive for `FM_OMP_WATCH_STABLE_MS` (30 seconds by default).
 When restoration succeeds, a rejected follow-up leaves the successor running and writes `state/.omp-watch-delivery-failed`, which stays outside watcher signal scans and is surfaced by the next session-start digest.
 Omp's blockable `session_stop` guard remains a bounded repair backstop and treats both in-flight tasks and X-mode-only relay polling as supervision need.
 
@@ -62,7 +62,7 @@ Only the watcher process touches `state/.last-watcher-beat`; no helper process c
 `tests/fm-watcher-lock.test.sh` covers verified-successor attach, the typed self-eviction failure, bounded and successor-linked lifecycle rows, and a SIGSTOP counterfactual that distinguishes a live PID from a stale beacon before classifying termination.
 `tests/fm-subagent-pretool-check.test.sh` proves Claude retains only the non-status Bash seatbelts.
 `tests/fm-claude-stop-autoarm.test.sh` covers the auto-arm's scope, stale and live session owners, unchanged AFK and need boundaries, single-flight, and exit-2 translation.
-`tests/fm-omp-watch-extension.test.sh` covers Omp's tracked child, successor-first actionable and failure follow-ups, capped established failures and spawn errors, stable-cycle budget reset, rejected-delivery persistence, lock ownership, direct guard continuation, X-mode-only supervision, and one-shot latch.
+`tests/fm-omp-watch-extension.test.sh` covers Omp's tracked child, successor-first actionable and failure follow-ups, capped established failures, delayed readiness, and spawn errors, post-readiness stable-cycle budget reset, rejected-delivery persistence, lock ownership, direct guard continuation, X-mode-only supervision, and one-shot latch.
 `FM_CLAUDE_LIVE_E2E=1 tests/fm-claude-stop-autoarm-live-e2e.test.sh` starts with the reproduced stale-lock state, runs session start first, completes two tokenless cycles, and checks the competing-live-owner negative control.
 `tests/fm-turnend-guard.test.sh` covers the cooperative `--claude` guard.
 

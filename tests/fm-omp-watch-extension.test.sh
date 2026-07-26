@@ -38,6 +38,7 @@ test_tracked_extensions_present_and_self_hashing() {
   assert_contains "$text" 'deliverAs: "followUp"' "tracked watcher extension missing followUp delivery"
   assert_contains "$text" 'FM_WATCH_REARM_RETRY_LIMIT' "tracked watcher extension missing bounded failure-path restarts"
   assert_contains "$text" 'FM_OMP_WATCH_STABLE_MS' "tracked watcher extension missing genuine-stability retry reset"
+  assert_contains "$text" 'process.hrtime.bigint()' "tracked watcher extension missing monotonic readiness stability timing"
   assert_contains "$text" ".omp-watch-delivery-failed" "tracked watcher extension missing durable delivery-failure marker"
   assert_contains "$text" ".omp-watch-extension-loaded" "tracked watcher extension missing loaded marker"
   assert_contains "$text" 'createHash("sha256").update(readFileSync(extensionFile)).digest("hex")' "watcher extension does not self-hash its own content for extensionVersion"
@@ -377,6 +378,63 @@ EOF
   pass "omp established failures stay within the restart cap"
 }
 
+test_omp_delayed_readiness_does_not_reset_retry_budget() {
+  local repo home plugin log out status
+  repo="$TMP_ROOT/omp-delayed-readiness-root"
+  home="$TMP_ROOT/omp-delayed-readiness-home"
+  log="$home/arm.log"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_omp_extension_fixture "$repo"
+  plugin="$repo/.omp/extensions/fm-primary-omp-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s predecessor=%s\n' "$$" "${FM_WATCH_PREDECESSOR_ARM_PID:-none}" >> "${FM_ARM_LOG:?}"
+sleep 0.08
+printf 'watcher: started synthetic delayed-readiness cycle\n'
+printf 'watcher: FAILED - synthetic immediate post-readiness failure\n'
+exit 7
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_WATCH_REARM_RETRY_LIMIT=2 FM_OMP_WATCH_STABLE_MS=50 node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+let tool = null;
+let deliveries = 0;
+const pi = {
+  on() {},
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_omp") tool = candidate;
+  },
+  sendUserMessage: async () => {
+    deliveries += 1;
+  },
+  zod: { object: (properties) => ({ type: "object", properties }) },
+};
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("tool-call-delayed-readiness", {}, undefined, undefined, {});
+for (let i = 0; i < 500; i += 1) {
+  if (deliveries >= 3) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+await new Promise((resolve) => setTimeout(resolve, 50));
+const rows = existsSync(process.env.FM_ARM_LOG)
+  ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n")
+  : [];
+if (rows.length !== 3) throw new Error(`delayed readiness bypassed the two-retry cap: ${rows.length}`);
+if (deliveries !== 3) throw new Error(`delayed-readiness deliveries bypassed the cap: ${deliveries}`);
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "omp delayed readiness must not count pre-ready startup as stability; output: $out"
+  [ -z "$out" ] || fail "omp delayed-readiness retry-cap test printed output: $out"
+  pass "omp delayed readiness preserves the restart cap"
+}
+
 test_omp_stable_cycle_resets_retry_budget() {
   local repo home plugin log out status
   repo="$TMP_ROOT/omp-stable-cycle-root"
@@ -396,7 +454,8 @@ case "$arm_count" in
     ;;
   2)
     printf 'watcher: started synthetic stable cycle\n'
-    sleep 0.08
+    : > "${FM_READY_MARKER:?}"
+    while [ ! -f "${FM_RELEASE_MARKER:?}" ]; do sleep 0.01; done
     printf 'watcher: FAILED - synthetic post-stability failure\n'
     exit 7
     ;;
@@ -409,7 +468,7 @@ trap 'exit 0' TERM INT
 while :; do sleep 0.05; done
 SH
   chmod +x "$repo/bin/fm-watch-arm.sh"
-  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_WATCH_REARM_RETRY_LIMIT=2 FM_OMP_WATCH_STABLE_MS=50 node --input-type=module 2>&1 <<'EOF'
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_READY_MARKER="$home/ready" FM_RELEASE_MARKER="$home/release" FM_WATCH_REARM_RETRY_LIMIT=2 FM_OMP_WATCH_STABLE_MS=50 node --input-type=module 2>&1 <<'EOF'
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -427,6 +486,13 @@ writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
 const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 mod.default(pi);
 await tool.execute("tool-call-stable-cycle", {}, undefined, undefined, {});
+for (let i = 0; i < 500; i += 1) {
+  if (existsSync(process.env.FM_READY_MARKER)) break;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+}
+if (!existsSync(process.env.FM_READY_MARKER)) throw new Error("stable watcher never reported readiness");
+await new Promise((resolve) => setTimeout(resolve, 80));
+writeFileSync(process.env.FM_RELEASE_MARKER, "\n");
 for (let i = 0; i < 500; i += 1) {
   const rows = existsSync(process.env.FM_ARM_LOG)
     ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n")
@@ -833,6 +899,7 @@ test_omp_wake_uses_canonical_watcher_input
 test_omp_delivery_rejection_keeps_successor_and_status
 test_omp_typed_failure_starts_successor_before_rejected_delivery
 test_omp_established_failures_stay_within_retry_cap
+test_omp_delayed_readiness_does_not_reset_retry_budget
 test_omp_stable_cycle_resets_retry_budget
 test_omp_spawn_errors_retry_with_cap
 test_omp_arm_distinguishes_session_lock_ownership
