@@ -234,13 +234,13 @@ jobs:
           echo "pr_number=${number}" >> "$GITHUB_OUTPUT"
           echo "Opened clean sync PR: ${url}"
 
-      # Conflict / force path:
-      # 1) Always open a PR whose head is the pure upper-source tip (GitHub then
-      #    reports conflicts against publish main). This uses GITHUB_TOKEN only.
-      # 2) Hand the PR to Copilot via agent-tasks API, then @copilot PR comment,
-      #    then issue assignment. Agent tasks require a user PAT that can use
-      #    Copilot cloud agent (classic repo-scoped PAT is the most reliable).
-      - name: Open conflict PR and hand off to Copilot
+      # Conflict / force path (agent-first so we can succeed without pushing
+      # workflow-file updates from this job):
+      # A) Start Copilot cloud agent to merge upper source and open a PR
+      # B) Else push a pure-upstream branch + open PR + @copilot / issue assign
+      #    (push needs classic PAT with both `repo` and `workflow` scopes when
+      #    upper source changed .github/workflows/*)
+      - name: Hand off conflicted sync to Copilot
         id: conflict
         if: >-
           steps.fetch.outputs.already_up_to_date == 'false' &&
@@ -256,24 +256,107 @@ jobs:
         run: |
           set -eu
 
+          conflict_block="${CONFLICTED:-not enumerated (force_copilot or direct handoff)}"
+          token="$(printf '%s' "${COPILOT_AGENT_TOKEN:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^[Bb]earer[[:space:]]//')"
+          handoff=""
+
+          if [ -z "$token" ]; then
+            {
+              echo "::error::COPILOT_AGENT_TOKEN is required for conflicted upstream sync."
+              echo "Create a classic PAT with BOTH scopes: repo + workflow, owned by a user"
+              echo "who can use Copilot coding agent on this repo, then:"
+              echo "  gh secret set COPILOT_AGENT_TOKEN --repo ${{ github.repository }}"
+            } >&2
+            exit 1
+          fi
+
+          # --- Path A: agent tasks API (no local push; agent opens the PR) ---
+          prompt="$(cat <<EOF
+          Sync ${{ github.repository }} with upper source https://github.com/${UPSTREAM_REPO} ref ${UPSTREAM_REF} (tip ${UPSTREAM_SHA}).
+
+          Publish base branch: main (has local customizations such as omp/kimi adapters).
+
+          Required:
+          1. From current main, merge ${UPSTREAM_REPO}@${UPSTREAM_REF} (${UPSTREAM_SHA}) into a new branch named like sync/upstream-copilot-<shortsha>.
+          2. Resolve every conflict:
+             - Integrate upper-source improvements for shared firstmate core.
+             - Preserve intentional local customizations on this publish fork.
+             - Combine both sides when the same area changed; never leave conflict markers.
+          3. Open a pull request into main titled "chore: sync upstream from ${UPSTREAM_REPO}", label it "${SYNC_LABEL}", and summarize resolutions.
+          4. Prefer a merge commit history over squashing upper-source commits.
+
+          Known conflicted paths from the workflow pre-check:
+          ${conflict_block}
+
+          Force full Copilot sync input: ${FORCE}
+          EOF
+          )"
+
+          payload="$(jq -n \
+            --arg prompt "$prompt" \
+            --arg base "main" \
+            '{prompt: $prompt, base_ref: $base, create_pull_request: true}')"
+
+          echo "Trying Copilot agent tasks API first (no workflow-file push from Actions)..."
+          http_code="$(curl -sS -o /tmp/copilot-task.json -w '%{http_code}' -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Authorization: Bearer ${token}" \
+            "https://api.github.com/agents/repos/${{ github.repository }}/tasks" \
+            -d "$payload" || true)"
+          echo "Agent tasks HTTP ${http_code}"
+          cat /tmp/copilot-task.json
+          echo
+
+          task_id="$(jq -r '.id // empty' /tmp/copilot-task.json)"
+          task_url="$(jq -r '.html_url // .url // empty' /tmp/copilot-task.json)"
+          pr_url="$(jq -r '.pull_request.html_url // empty' /tmp/copilot-task.json)"
+          if [ -n "$task_id" ]; then
+            handoff="agent-task"
+            echo "task_id=${task_id}" >> "$GITHUB_OUTPUT"
+            echo "task_url=${task_url}" >> "$GITHUB_OUTPUT"
+            if [ -n "$pr_url" ]; then
+              echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+            fi
+            echo "handoff=${handoff}" >> "$GITHUB_OUTPUT"
+            echo "Copilot agent task started: ${task_url:-$task_id}"
+            exit 0
+          fi
+
+          echo "::warning::Agent tasks API did not start a task (HTTP ${http_code}). Falling back to conflict PR push."
+          if [ "$http_code" = "403" ] || [ "$http_code" = "401" ]; then
+            echo "::warning::Token rejected for agent tasks. Classic PAT with repo scope (user who can use Copilot) is most reliable; fine-grained PATs often return forbidden."
+          fi
+
+          # --- Path B: push pure upstream tip as PR head, then @copilot ---
           stamp="$(date -u +%Y%m%d-%H%M%S)"
           short_sha="$(printf '%s' "$UPSTREAM_SHA" | cut -c1-7)"
           branch="sync/upstream-${stamp}-${short_sha}"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
 
-          # Head = exact upper-source tip. Base = publish main. GitHub surfaces
-          # the real merge conflicts; Copilot's conflict flow targets this shape.
-          # Requires COPILOT_AGENT_TOKEN with classic `workflow` scope when the
-          # tip changes .github/workflows/* (configured on the identity step).
-          if ! git push origin "refs/remotes/upstream/${UPSTREAM_REF}:refs/heads/${branch}"; then
+          set +e
+          push_out="$(git push origin "refs/remotes/upstream/${UPSTREAM_REF}:refs/heads/${branch}" 2>&1)"
+          push_rc=$?
+          set -e
+          printf '%s\n' "$push_out"
+          if [ "$push_rc" -ne 0 ]; then
             {
-              echo "::error::Failed to push sync branch ${branch}."
-              echo "If the remote rejected a workflow-file update, set COPILOT_AGENT_TOKEN to a classic PAT with BOTH repo and workflow scopes."
+              echo "::error::Failed to push sync branch ${branch} (exit ${push_rc})."
+              if printf '%s' "$push_out" | grep -qi 'without `workflow` scope\|without workflow'; then
+                echo
+                echo "Your COPILOT_AGENT_TOKEN is a Personal Access Token but it lacks the classic workflow scope."
+                echo "Upper source changed .github/workflows/*, and GitHub blocks that push without workflow scope."
+                echo
+                echo "Fix:"
+                echo "  1. Create a classic PAT: https://github.com/settings/tokens"
+                echo "  2. Enable BOTH scopes: repo  AND  workflow"
+                echo "  3. gh secret set COPILOT_AGENT_TOKEN --repo ${{ github.repository }}"
+                echo "  4. Re-run this workflow"
+              fi
             } >&2
             exit 1
           fi
 
-          conflict_block="${CONFLICTED:-not enumerated (force_copilot or direct handoff)}"
           title="chore: sync upstream from ${UPSTREAM_REPO}"
           body="$(cat <<EOF
           ## Upstream sync (conflicts)
@@ -296,10 +379,9 @@ jobs:
           2. Integrate upper-source improvements for shared firstmate core behavior.
           3. Preserve intentional local customizations on this publish fork (for example verified omp / kimi harness adapters and other leihuang23-only commits).
           4. When both sides changed the same area, combine them; never leave conflict markers.
-          5. Prefer preserving recoverable history over squashing upper-source commits.
 
           ### Manual fallback
-          If Copilot did not start, use **Fix with Copilot** on this PR, or comment:
+          Use **Fix with Copilot** on this PR, or comment:
           \`@copilot Merge main into this branch and resolve all conflicts using the policy above.\`
 
           <!-- sync-upstream upstream-sha=${UPSTREAM_SHA} -->
@@ -323,75 +405,8 @@ jobs:
           echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
           echo "Opened conflict sync PR: ${pr_url}"
 
-          handoff=""
-          # Normalize secret: strip CR/LF/space and an accidental "Bearer " prefix.
-          token="$(printf '%s' "${COPILOT_AGENT_TOKEN:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^[Bb]earer[[:space:]]//')"
-
-          if [ -z "$token" ]; then
-            {
-              echo "::error::Opened ${pr_url} but COPILOT_AGENT_TOKEN is missing, so Copilot was not started."
-              echo "Add a classic PAT (repo scope) as secret COPILOT_AGENT_TOKEN, then re-run or comment @copilot on the PR."
-            } >&2
-            exit 1
-          fi
-
-          # --- Path A: agent tasks API (user-to-server token only) ---
-          prompt="$(cat <<EOF
-          Resolve merge conflicts on pull request #${pr_number} in ${{ github.repository }}.
-
-          The PR head is upper source ${UPSTREAM_REPO}@${UPSTREAM_REF} (${UPSTREAM_SHA}).
-          The PR base is publish main (includes local customizations).
-
-          Do this:
-          1. Check out the PR branch and merge origin/main into it (or equivalent) so the PR becomes mergeable.
-          2. Resolve every conflict:
-             - Integrate upper-source improvements for shared firstmate core.
-             - Preserve intentional local customizations (omp / kimi adapters and other leihuang23-only work).
-             - Combine both sides when the same area changed; never leave conflict markers.
-          3. Push the resolved branch and leave PR #${pr_number} ready for review.
-          4. Summarize what you resolved in a PR comment.
-
-          Known conflicted paths from the workflow pre-check:
-          ${conflict_block}
-
-          Force full Copilot sync input: ${FORCE}
-          EOF
-          )"
-
-          payload="$(jq -n \
-            --arg prompt "$prompt" \
-            --arg base "main" \
-            '{prompt: $prompt, base_ref: $base, create_pull_request: false}')"
-
-          echo "Trying Copilot agent tasks API..."
-          http_code="$(curl -sS -o /tmp/copilot-task.json -w '%{http_code}' -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -H "Authorization: Bearer ${token}" \
-            "https://api.github.com/agents/repos/${{ github.repository }}/tasks" \
-            -d "$payload" || true)"
-          echo "Agent tasks HTTP ${http_code}"
-          cat /tmp/copilot-task.json
-          echo
-
-          task_id="$(jq -r '.id // empty' /tmp/copilot-task.json)"
-          task_url="$(jq -r '.html_url // .url // empty' /tmp/copilot-task.json)"
-          if [ -n "$task_id" ]; then
-            handoff="agent-task"
-            echo "task_id=${task_id}" >> "$GITHUB_OUTPUT"
-            echo "task_url=${task_url}" >> "$GITHUB_OUTPUT"
-            echo "Copilot agent task started: ${task_url:-$task_id}"
-          else
-            echo "::warning::Agent tasks API did not start a task (HTTP ${http_code}). Response above."
-            if [ "$http_code" = "403" ] || [ "$http_code" = "401" ]; then
-              echo "::warning::Token was rejected for agent tasks. Prefer a classic PAT with the repo scope from a user who can use Copilot coding agent on this repo. Fine-grained PATs often return forbidden for this endpoint."
-            fi
-          fi
-
-          # --- Path B: @copilot comment on the conflict PR (official conflict flow) ---
-          if [ -z "$handoff" ]; then
-            echo "Trying @copilot PR comment handoff..."
-            comment_body="$(cat <<EOF
+          echo "Trying @copilot PR comment handoff..."
+          comment_body="$(cat <<EOF
           @copilot Merge \`main\` into this branch and resolve all merge conflicts.
 
           Policy:
@@ -403,31 +418,28 @@ jobs:
           Conflicted paths from the workflow pre-check:
           ${conflict_block}
           EOF
-            )"
-            comment_payload="$(jq -n --arg body "$comment_body" '{body: $body}')"
-            comment_code="$(curl -sS -o /tmp/copilot-comment.json -w '%{http_code}' -X POST \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -H "Authorization: Bearer ${token}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/${pr_number}/comments" \
-              -d "$comment_payload" || true)"
-            echo "PR comment HTTP ${comment_code}"
-            cat /tmp/copilot-comment.json
-            echo
-            comment_id="$(jq -r '.id // empty' /tmp/copilot-comment.json)"
-            if [ -n "$comment_id" ] && [ "$comment_code" = "201" ]; then
-              handoff="pr-comment"
-              echo "comment_id=${comment_id}" >> "$GITHUB_OUTPUT"
-              echo "Posted @copilot conflict-resolution comment on PR #${pr_number}"
-            else
-              echo "::warning::Could not post @copilot comment with COPILOT_AGENT_TOKEN (HTTP ${comment_code})."
-            fi
+          )"
+          comment_payload="$(jq -n --arg body "$comment_body" '{body: $body}')"
+          comment_code="$(curl -sS -o /tmp/copilot-comment.json -w '%{http_code}' -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Authorization: Bearer ${token}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${pr_number}/comments" \
+            -d "$comment_payload" || true)"
+          echo "PR comment HTTP ${comment_code}"
+          cat /tmp/copilot-comment.json
+          echo
+          comment_id="$(jq -r '.id // empty' /tmp/copilot-comment.json)"
+          if [ -n "$comment_id" ] && [ "$comment_code" = "201" ]; then
+            handoff="pr-comment"
+            echo "comment_id=${comment_id}" >> "$GITHUB_OUTPUT"
+            echo "Posted @copilot conflict-resolution comment on PR #${pr_number}"
+          else
+            echo "::warning::Could not post @copilot comment (HTTP ${comment_code})."
           fi
 
-          # --- Path C: create issue assigned to copilot-swe-agent ---
           if [ -z "$handoff" ]; then
             echo "Trying Copilot issue assignment handoff..."
-            # Read-only GraphQL can use GITHUB_TOKEN (already in GH_TOKEN).
             bot_id="$(gh api graphql -f query='
               query($owner:String!,$name:String!) {
                 repository(owner:$owner, name:$name) {
@@ -447,23 +459,16 @@ jobs:
               }' -f owner='${{ github.repository_owner }}' -f name='${{ github.event.repository.name }}' \
               --jq '.data.repository.id')"
 
-            if [ -z "$bot_id" ]; then
-              echo "::warning::copilot-swe-agent is not assignable on this repository."
-            else
+            if [ -n "$bot_id" ]; then
               issue_title="chore: resolve upstream sync conflicts for PR #${pr_number}"
               issue_body="$(cat <<EOF
-              ## Upstream sync conflict handoff
-
               Please resolve conflicts on ${pr_url} and make that PR mergeable.
 
-              - Upper source: https://github.com/${UPSTREAM_REPO}/tree/${UPSTREAM_REF}
-              - Upstream tip: \`${UPSTREAM_SHA}\`
-              - Publish base: \`main\`
-              - Conflicted paths: ${conflict_block}
+              Upper source: https://github.com/${UPSTREAM_REPO}/tree/${UPSTREAM_REF}
+              Upstream tip: \`${UPSTREAM_SHA}\`
+              Conflicted paths: ${conflict_block}
 
               Policy: integrate upper-source core improvements; preserve local customizations; never leave conflict markers.
-
-              Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
               EOF
               )"
               custom_instructions="Resolve merge conflicts on PR #${pr_number} (${pr_url}). Merge main into the PR branch. Preserve local customizations while integrating ${UPSTREAM_REPO}@${UPSTREAM_REF} (${UPSTREAM_SHA})."
@@ -521,8 +526,6 @@ jobs:
                 handoff="issue"
                 echo "issue_url=${issue_url}" >> "$GITHUB_OUTPUT"
                 echo "Assigned Copilot via issue: ${issue_url}"
-              else
-                echo "::warning::Issue assignment to Copilot failed."
               fi
             fi
           fi
@@ -531,14 +534,7 @@ jobs:
           if [ -z "$handoff" ]; then
             {
               echo "::error::Opened conflict PR ${pr_url}, but every Copilot handoff path failed."
-              echo
-              echo "Fix COPILOT_AGENT_TOKEN, then re-run or click Fix with Copilot / comment @copilot on the PR."
-              echo
-              echo "Recommended secret value: a classic personal access token with the repo scope,"
-              echo "created by a user who can use Copilot coding agent on this repository."
-              echo "Fine-grained PATs often get HTTP 403 forbidden on POST /agents/repos/.../tasks."
-              echo
-              echo "Also verify the secret has no leading/trailing whitespace and is not prefixed with 'Bearer '."
+              echo "Fix COPILOT_AGENT_TOKEN (classic PAT: repo + workflow), re-run, or click Fix with Copilot on the PR."
             } >&2
             exit 1
           fi
