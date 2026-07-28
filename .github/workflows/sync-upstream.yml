@@ -2,12 +2,15 @@
 # (leihuang23/firstmate). Clean merges open a review PR; real conflicts hand off
 # to GitHub Copilot cloud agent to resolve while preserving local customizations.
 #
-# Required for conflict resolution (not needed for clean merges):
+# Required when upper source touches .github/workflows/* OR when conflicts need
+# Copilot handoff (recommended to always set it for this workflow):
 #   Repository secret COPILOT_AGENT_TOKEN
-#   - Prefer a classic PAT with the `repo` scope (most reliable for agent tasks).
-#   - Fine-grained PATs often return HTTP 403 forbidden on POST /agents/repos/.../tasks.
+#   - Prefer a classic PAT with BOTH scopes: `repo` and `workflow`.
+#     * `workflow` is required to push branches that change Actions workflow files
+#       (GITHUB_TOKEN cannot do that; there is no workflows: write permission).
+#     * `repo` is required for contents/PRs and for the agent-tasks API.
+#   - Fine-grained PATs often return HTTP 403 on POST /agents/repos/.../tasks.
 #   - Token must belong to a user who can use Copilot coding agent on this repo.
-#   - Installation tokens (GITHUB_TOKEN) cannot start Copilot agent tasks.
 #   - Do not prefix the secret value with "Bearer "; strip whitespace when pasting.
 #
 # Optional:
@@ -38,11 +41,6 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  # Required when upper source changes .github/workflows/*; otherwise
-  # `git push` of the upstream tip is rejected with:
-  # "refusing to allow a GitHub App to create or update workflow ... without
-  # workflows permission".
-  workflows: write
 
 env:
   UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO || 'kunchenguid/firstmate' }}
@@ -64,11 +62,23 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Configure git identity
+      - name: Configure git identity and push credentials
+        env:
+          COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
         run: |
           set -eu
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Prefer the user PAT for pushes. GITHUB_TOKEN cannot create/update
+          # branches that modify .github/workflows/* (common on upstream syncs).
+          token="$(printf '%s' "${COPILOT_AGENT_TOKEN:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^[Bb]earer[[:space:]]//')"
+          if [ -n "$token" ]; then
+            git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
+            echo "Using COPILOT_AGENT_TOKEN for origin pushes (needed for workflow-file updates)."
+          else
+            echo "::warning::COPILOT_AGENT_TOKEN is unset. Pushes that touch .github/workflows will be rejected."
+          fi
 
       - name: Fetch upper source
         id: fetch
@@ -247,7 +257,15 @@ jobs:
 
           # Head = exact upper-source tip. Base = publish main. GitHub surfaces
           # the real merge conflicts; Copilot's conflict flow targets this shape.
-          git push origin "refs/remotes/upstream/${UPSTREAM_REF}:refs/heads/${branch}"
+          # Requires COPILOT_AGENT_TOKEN with classic `workflow` scope when the
+          # tip changes .github/workflows/* (configured on the identity step).
+          if ! git push origin "refs/remotes/upstream/${UPSTREAM_REF}:refs/heads/${branch}"; then
+            {
+              echo "::error::Failed to push sync branch ${branch}."
+              echo "If the remote rejected a workflow-file update, set COPILOT_AGENT_TOKEN to a classic PAT with BOTH repo and workflow scopes."
+            } >&2
+            exit 1
+          fi
 
           conflict_block="${CONFLICTED:-not enumerated (force_copilot or direct handoff)}"
           title="chore: sync upstream from ${UPSTREAM_REPO}"
