@@ -61,30 +61,30 @@ jobs:
         with:
           fetch-depth: 0
           ref: main
+          # Do not install GITHUB_TOKEN via includeIf/extraheader. That auth
+          # cannot push workflow-file updates and is hard to fully override.
+          persist-credentials: false
 
       - name: Configure git identity and push credentials
         env:
           COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -eu
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Prefer the user PAT for origin pushes. GITHUB_TOKEN cannot create/update
-          # branches that modify .github/workflows/* (common on upstream syncs).
-          #
-          # actions/checkout installs GITHUB_TOKEN as http.https://github.com/.extraheader,
-          # which overrides remote-URL credentials and also attaches to every github.com
-          # fetch (including public upper-source). Remove that header and put the PAT only
-          # in the origin remote URL so upstream can still fetch anonymously.
+          # Prefer a classic PAT with repo+workflow scopes. GITHUB_TOKEN cannot
+          # push branches that modify .github/workflows/* (typical on upstream sync).
           token="$(printf '%s' "${COPILOT_AGENT_TOKEN:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^[Bb]earer[[:space:]]//')"
-          git config --local --unset-all http.https://github.com/.extraheader || true
-          if [ -n "$token" ]; then
-            git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
-            echo "Using COPILOT_AGENT_TOKEN for origin pushes (needed for workflow-file updates)."
-          else
-            echo "::warning::COPILOT_AGENT_TOKEN is unset. Pushes that touch .github/workflows will be rejected."
+          auth_source="COPILOT_AGENT_TOKEN"
+          if [ -z "$token" ]; then
+            token="$(printf '%s' "${GITHUB_TOKEN:-}" | tr -d '\r\n')"
+            auth_source="GITHUB_TOKEN"
+            echo "::warning::COPILOT_AGENT_TOKEN is unset; falling back to GITHUB_TOKEN (workflow-file pushes will fail)."
           fi
+          git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
+          echo "Origin push auth source: ${auth_source}"
 
       - name: Fetch upper source
         id: fetch
