@@ -9,7 +9,7 @@
 # This file is sourced by scripts and has no side effects on source.
 
 # Known harness command names; extend when a new adapter is verified.
-FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^omp$'
+FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$|^omp$'
 
 # omp runs either as its own command or as `bun <path>/omp ...`.
 # For bun, only the interpreter's script argument identifies the harness;
@@ -58,7 +58,15 @@ fm_harness_pid_alive() {
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
   args=$(ps -o args= -p "$pid" 2>/dev/null)
   fm_args_are_omp "$comm" "$args" && return 0
-  printf '%s' "$(basename "$comm") $args" | grep -qE "$FM_HARNESS_RE"
+  if printf '%s' "$(basename "$comm")" | grep -qE "$FM_HARNESS_RE"; then
+    return 0
+  fi
+  case "$comm" in
+    *node*|*python*|*bun*)
+      printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"
+      ;;
+    *) return 1 ;;
+  esac
 }
 
 # True when state dir $1 holds a session lock whose pid is the harness ancestor

@@ -46,11 +46,12 @@ Verify setup by spawning a small task and confirming its `fm-<id>` window appear
 
 A target-existence check proves only that the pane exists.
 The deeper tmux agent-liveness probe first verifies exact window membership, then reads `#{pane_current_command}` to distinguish a running harness process from a bare idle shell.
-It classifies recognized Claude, Codex, OpenCode, Grok, and Kimi process names as `alive`, common shells as `dead`, an authoritatively absent window as `missing`, unreadable state as `unreadable`, and every other process as `ambiguous`.
+It classifies recognized Claude, Codex, OpenCode, Pi, pi-signed, Grok, and Kimi process names as `alive`, common shells as `dead`, an authoritatively absent window as `missing`, unreadable state as `unreadable`, and every other process as `ambiguous`.
 Only `dead` and `missing` authorize recovery because a false dead result could launch a duplicate agent.
 
-Pi runs through a generic `node` process name, and Omp runs through a generic `bun` process name, so neither can be attributed confidently from the tmux foreground-process field.
-An existing Pi or Omp pane is therefore reported as ambiguous rather than auto-healed, while an authoritatively missing window can be relaunched safely.
+The verified Pi Launcher path reports the exact foreground command `pi-launcher` for both pi and pi-signed, while direct executable identities `pi`, `pi-signed`, and `Pi` remain accepted exactly.
+Similar or prefixed process names are not accepted through those exact Pi-family entries.
+Omp runs through a generic `bun` process name, so an existing Omp pane is reported as ambiguous rather than auto-healed, while an authoritatively missing window can be relaunched safely.
 This is the active tmux liveness limitation.
 
 Agent liveness and composer safety are separate checks.
