@@ -70,16 +70,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Prefer the user PAT for pushes. GITHUB_TOKEN cannot create/update
+          # Prefer the user PAT for origin pushes. GITHUB_TOKEN cannot create/update
           # branches that modify .github/workflows/* (common on upstream syncs).
-          # actions/checkout also installs GITHUB_TOKEN as http.*.extraheader, which
-          # overrides credentials embedded in the remote URL — replace that header.
+          #
+          # actions/checkout installs GITHUB_TOKEN as http.https://github.com/.extraheader,
+          # which overrides remote-URL credentials and also attaches to every github.com
+          # fetch (including public upper-source). Remove that header and put the PAT only
+          # in the origin remote URL so upstream can still fetch anonymously.
           token="$(printf '%s' "${COPILOT_AGENT_TOKEN:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^[Bb]earer[[:space:]]//')"
+          git config --local --unset-all http.https://github.com/.extraheader || true
           if [ -n "$token" ]; then
             git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
-            git config --local --unset-all http.https://github.com/.extraheader || true
-            basic="$(printf 'x-access-token:%s' "$token" | base64 | tr -d '\n')"
-            git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basic}"
             echo "Using COPILOT_AGENT_TOKEN for origin pushes (needed for workflow-file updates)."
           else
             echo "::warning::COPILOT_AGENT_TOKEN is unset. Pushes that touch .github/workflows will be rejected."
