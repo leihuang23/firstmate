@@ -72,9 +72,14 @@ jobs:
 
           # Prefer the user PAT for pushes. GITHUB_TOKEN cannot create/update
           # branches that modify .github/workflows/* (common on upstream syncs).
+          # actions/checkout also installs GITHUB_TOKEN as http.*.extraheader, which
+          # overrides credentials embedded in the remote URL — replace that header.
           token="$(printf '%s' "${COPILOT_AGENT_TOKEN:-}" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^[Bb]earer[[:space:]]//')"
           if [ -n "$token" ]; then
             git remote set-url origin "https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.git"
+            git config --local --unset-all http.https://github.com/.extraheader || true
+            basic="$(printf 'x-access-token:%s' "$token" | base64 | tr -d '\n')"
+            git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basic}"
             echo "Using COPILOT_AGENT_TOKEN for origin pushes (needed for workflow-file updates)."
           else
             echo "::warning::COPILOT_AGENT_TOKEN is unset. Pushes that touch .github/workflows will be rejected."
