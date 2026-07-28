@@ -38,6 +38,11 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  # Required when upper source changes .github/workflows/*; otherwise
+  # `git push` of the upstream tip is rejected with:
+  # "refusing to allow a GitHub App to create or update workflow ... without
+  # workflows permission".
+  workflows: write
 
 env:
   UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO || 'kunchenguid/firstmate' }}
