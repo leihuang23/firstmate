@@ -1,0 +1,481 @@
+# Periodically pull kunchenguid/firstmate (upper source) into this publish repo
+# (leihuang23/firstmate). Clean merges open a review PR; real conflicts hand off
+# to GitHub Copilot cloud agent to resolve while preserving local customizations.
+#
+# Required for conflict resolution (not needed for clean merges):
+#   Repository secret COPILOT_AGENT_TOKEN
+#   - Fine-grained PAT (user-to-server) or classic PAT with repo scope
+#   - Fine-grained needs: Metadata (read), Contents (read/write), Issues (read/write),
+#     Pull requests (read/write), Actions (read/write)
+#   - Must belong to a user who can assign Copilot / start agent tasks on this repo
+#   - Installation (GITHUB_TOKEN) tokens cannot start Copilot agent tasks
+#
+# Optional:
+#   vars.UPSTREAM_REPO  - default kunchenguid/firstmate
+#   vars.UPSTREAM_REF   - default main
+name: Sync upstream
+
+on:
+  schedule:
+    # Daily 08:15 UTC (offset from the hour to reduce schedule thundering herds)
+    - cron: "15 8 * * *"
+  workflow_dispatch:
+    inputs:
+      force_copilot:
+        description: "Skip the local merge attempt and ask Copilot to perform the full sync"
+        type: boolean
+        default: false
+      open_as_draft:
+        description: "Open the sync PR as a draft"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO || 'kunchenguid/firstmate' }}
+  UPSTREAM_REF: ${{ vars.UPSTREAM_REF || 'main' }}
+  # Stable label used to find an already-open sync PR
+  SYNC_LABEL: upstream-sync
+
+jobs:
+  sync:
+    name: Sync from upper source
+    runs-on: ubuntu-latest
+    # Only run on the publish repo so this workflow never fires if it is ever
+    # contributed back to the upper source.
+    if: github.repository == 'leihuang23/firstmate'
+    steps:
+      - name: Checkout publish main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upper source
+        id: fetch
+        run: |
+          set -eu
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch --no-tags upstream "${UPSTREAM_REF}"
+          upstream_sha="$(git rev-parse "upstream/${UPSTREAM_REF}")"
+          local_sha="$(git rev-parse HEAD)"
+          echo "upstream_sha=${upstream_sha}" >> "$GITHUB_OUTPUT"
+          echo "local_sha=${local_sha}" >> "$GITHUB_OUTPUT"
+          echo "Upper source ${UPSTREAM_REPO}@${UPSTREAM_REF} = ${upstream_sha}"
+          echo "Publish main = ${local_sha}"
+
+          if git merge-base --is-ancestor "$upstream_sha" HEAD; then
+            echo "already_up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "Publish main already contains upper source tip."
+          else
+            echo "already_up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "Upper source has commits not in publish main."
+            git log --oneline "HEAD..${upstream_sha}" | head -40 || true
+          fi
+
+      - name: Skip when already synced
+        if: steps.fetch.outputs.already_up_to_date == 'true'
+        run: |
+          echo "Nothing to sync. Publish main already includes ${UPSTREAM_REPO}@${UPSTREAM_REF}."
+
+      - name: Ensure sync label exists
+        if: steps.fetch.outputs.already_up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if ! gh label list --json name --jq '.[].name' | grep -qx "$SYNC_LABEL"; then
+            gh label create "$SYNC_LABEL" \
+              --color "0E8A16" \
+              --description "Automated sync from upper source (kunchenguid/firstmate)" \
+              || true
+          fi
+
+      - name: Reuse open sync PR if present
+        id: existing
+        if: steps.fetch.outputs.already_up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          # Prefer an open PR that still targets the current upstream tip when possible.
+          pr_json="$(gh pr list --state open --label "$SYNC_LABEL" --json number,url,headRefName,body --jq '.[0] // empty')"
+          if [ -z "$pr_json" ]; then
+            echo "has_open_pr=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          number="$(printf '%s' "$pr_json" | jq -r '.number')"
+          url="$(printf '%s' "$pr_json" | jq -r '.url')"
+          head="$(printf '%s' "$pr_json" | jq -r '.headRefName')"
+          echo "has_open_pr=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${number}" >> "$GITHUB_OUTPUT"
+          echo "pr_url=${url}" >> "$GITHUB_OUTPUT"
+          echo "head_ref=${head}" >> "$GITHUB_OUTPUT"
+          echo "Open sync PR already exists: ${url}"
+
+      - name: Attempt clean merge into a sync branch
+        id: merge
+        if: >-
+          steps.fetch.outputs.already_up_to_date == 'false' &&
+          steps.existing.outputs.has_open_pr != 'true' &&
+          inputs.force_copilot != true
+        run: |
+          set -eu
+          stamp="$(date -u +%Y%m%d-%H%M%S)"
+          short_sha="$(printf '%s' "${{ steps.fetch.outputs.upstream_sha }}" | cut -c1-7)"
+          branch="sync/upstream-${stamp}-${short_sha}"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+          git checkout -B "$branch" main
+          set +e
+          git merge --no-ff --no-edit "upstream/${UPSTREAM_REF}"
+          merge_rc=$?
+          set -e
+
+          if [ "$merge_rc" -eq 0 ]; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+            git push -u origin "HEAD:refs/heads/${branch}"
+            echo "Pushed clean merge branch ${branch}"
+            exit 0
+          fi
+
+          # Capture conflict inventory for the Copilot handoff, then abandon the
+          # dirty worktree so the Copilot path starts from a clean main base.
+          conflicted="$(git diff --name-only --diff-filter=U | tr '\n' ' ')"
+          echo "status=conflict" >> "$GITHUB_OUTPUT"
+          echo "conflicted_files=${conflicted}" >> "$GITHUB_OUTPUT"
+          echo "Merge conflicts detected:"
+          git diff --name-only --diff-filter=U || true
+          git merge --abort
+          git checkout main
+          git branch -D "$branch" || true
+
+      - name: Open PR for clean merge
+        id: clean_pr
+        if: steps.merge.outputs.status == 'clean'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.merge.outputs.branch }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+          DRAFT: ${{ inputs.open_as_draft == true && 'true' || 'false' }}
+        run: |
+          set -eu
+          title="chore: sync upstream from ${UPSTREAM_REPO}"
+          body="$(cat <<EOF
+          ## Upstream sync
+
+          Automated merge of [\`${UPSTREAM_REPO}@${UPSTREAM_REF}\`](https://github.com/${UPSTREAM_REPO}/tree/${UPSTREAM_REF}) into this publish repo.
+
+          | | |
+          | --- | --- |
+          | Upper source | \`${UPSTREAM_REPO}@${UPSTREAM_REF}\` |
+          | Upstream tip | \`${UPSTREAM_SHA}\` |
+          | Merge | Clean (no conflicts) |
+
+          ### Review notes
+          - This PR was opened by the scheduled **Sync upstream** workflow.
+          - Prefer merging with a normal merge commit (not squash) so upper-source history stays recoverable.
+          - Local customizations on publish \`main\` were preserved by the merge commit.
+
+          <!-- sync-upstream upstream-sha=${UPSTREAM_SHA} -->
+          EOF
+          )"
+
+          draft_flag=()
+          if [ "$DRAFT" = "true" ]; then
+            draft_flag=(--draft)
+          fi
+
+          url="$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "$title" \
+            --body "$body" \
+            --label "$SYNC_LABEL" \
+            "${draft_flag[@]}")"
+          number="$(gh pr view "$url" --json number --jq '.number')"
+          echo "pr_url=${url}" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${number}" >> "$GITHUB_OUTPUT"
+          echo "Opened clean sync PR: ${url}"
+
+      - name: Ask Copilot to resolve conflicts (or full sync)
+        id: copilot
+        if: >-
+          steps.fetch.outputs.already_up_to_date == 'false' &&
+          steps.existing.outputs.has_open_pr != 'true' &&
+          (steps.merge.outputs.status == 'conflict' || inputs.force_copilot == true)
+        env:
+          COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+          CONFLICTED: ${{ steps.merge.outputs.conflicted_files || '' }}
+          FORCE: ${{ inputs.force_copilot == true && 'true' || 'false' }}
+        run: |
+          set -eu
+          if [ -z "${COPILOT_AGENT_TOKEN:-}" ]; then
+            {
+              echo "::error::Merge conflicts (or force_copilot) require secret COPILOT_AGENT_TOKEN."
+              echo
+              echo "Create a fine-grained PAT for a user who can use Copilot on this repo,"
+              echo "with Contents/Issues/Pull requests/Actions read-write and Metadata read,"
+              echo "then store it as repository secret COPILOT_AGENT_TOKEN."
+              echo
+              echo "Upper source tip: ${UPSTREAM_SHA}"
+              echo "Conflicted files: ${CONFLICTED:-unknown}"
+            } >&2
+            exit 1
+          fi
+
+          conflict_block="none detected before handoff (force_copilot or direct handoff)"
+          if [ -n "${CONFLICTED:-}" ]; then
+            conflict_block="${CONFLICTED}"
+          fi
+
+          prompt="$(cat <<EOF
+          Sync this repository with its upper source and open a pull request into main.
+
+          Upper source (periodic sync origin):
+          - repository: https://github.com/${UPSTREAM_REPO}
+          - ref: ${UPSTREAM_REF}
+          - tip SHA: ${UPSTREAM_SHA}
+
+          Publish repository (this repo): ${{ github.repository }}
+          Base branch: main
+
+          Required steps:
+          1. Start from current origin/main.
+          2. Fetch the upper source and merge ${UPSTREAM_REF} (SHA ${UPSTREAM_SHA}) into a new branch named like sync/upstream-copilot-<shortsha>.
+          3. Resolve EVERY merge conflict carefully:
+             - Integrate upper-source improvements for shared firstmate core behavior.
+             - Preserve intentional local customizations that only exist on this publish fork (for example verified omp / kimi harness adapters and other leihuang23-only commits).
+             - When both sides changed the same area, combine them instead of dropping either side's unique behavior.
+             - Never leave conflict markers in the tree.
+          4. Run or fix obvious breakage from the merge when practical (lint/tests if cheap).
+          5. Open a pull request into main with:
+             - title: chore: sync upstream from ${UPSTREAM_REPO}
+             - label: ${SYNC_LABEL}
+             - body that lists the upstream tip SHA and summarizes conflict resolutions
+          6. Prefer a merge commit history over squashing upper-source commits.
+
+          Known conflicted paths from the automated pre-check:
+          ${conflict_block}
+
+          Force full Copilot sync: ${FORCE}
+          EOF
+          )"
+
+          # Agent tasks API requires a user-to-server token (PAT). GITHUB_TOKEN
+          # (installation) is rejected by this endpoint.
+          # https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api
+          payload="$(jq -n \
+            --arg prompt "$prompt" \
+            --arg base "main" \
+            '{prompt: $prompt, base_ref: $base, create_pull_request: true}')"
+
+          echo "Starting Copilot cloud agent task..."
+          response="$(curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Authorization: Bearer ${COPILOT_AGENT_TOKEN}" \
+            "https://api.github.com/agents/repos/${{ github.repository }}/tasks" \
+            -d "$payload")"
+
+          echo "$response" | jq '{id, state, pull_request, html_url, url} // .'
+
+          task_id="$(printf '%s' "$response" | jq -r '.id // empty')"
+          task_url="$(printf '%s' "$response" | jq -r '.html_url // .url // empty')"
+          pr_url="$(printf '%s' "$response" | jq -r '.pull_request.html_url // .pull_request // empty')"
+
+          if [ -z "$task_id" ]; then
+            echo "::error::Copilot agent task API did not return a task id."
+            echo "$response" >&2
+            exit 1
+          fi
+
+          echo "task_id=${task_id}" >> "$GITHUB_OUTPUT"
+          echo "task_url=${task_url}" >> "$GITHUB_OUTPUT"
+          if [ -n "$pr_url" ] && [ "$pr_url" != "null" ]; then
+            echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Copilot task ${task_id} started${task_url:+: ${task_url}}"
+
+      - name: Fallback assign issue to Copilot if agent task API unavailable
+        id: issue_fallback
+        if: >-
+          failure() &&
+          steps.copilot.outcome == 'failure' &&
+          steps.fetch.outputs.already_up_to_date == 'false' &&
+          steps.existing.outputs.has_open_pr != 'true' &&
+          (steps.merge.outputs.status == 'conflict' || inputs.force_copilot == true)
+        env:
+          COPILOT_AGENT_TOKEN: ${{ secrets.COPILOT_AGENT_TOKEN }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+          CONFLICTED: ${{ steps.merge.outputs.conflicted_files || '' }}
+        run: |
+          set -eu
+          if [ -z "${COPILOT_AGENT_TOKEN:-}" ]; then
+            exit 1
+          fi
+
+          # Resolve Copilot bot id for assignment (enabled on this repo).
+          bot_id="$(gh api graphql -f query='
+            query($owner:String!,$name:String!) {
+              repository(owner:$owner, name:$name) {
+                suggestedActors(capabilities:[CAN_BE_ASSIGNED], first:100) {
+                  nodes {
+                    login
+                    ... on Bot { id }
+                    ... on User { id }
+                  }
+                }
+              }
+            }' -f owner='${{ github.repository_owner }}' -f name='${{ github.event.repository.name }}' \
+            --jq '.data.repository.suggestedActors.nodes[] | select(.login=="copilot-swe-agent") | .id')"
+
+          if [ -z "$bot_id" ]; then
+            echo "::error::copilot-swe-agent is not assignable on this repository."
+            exit 1
+          fi
+
+          repo_id="$(gh api graphql -f query='
+            query($owner:String!,$name:String!) {
+              repository(owner:$owner, name:$name) { id }
+            }' -f owner='${{ github.repository_owner }}' -f name='${{ github.event.repository.name }}' \
+            --jq '.data.repository.id')"
+
+          title="chore: sync upstream from ${UPSTREAM_REPO} (${UPSTREAM_SHA:0:7})"
+          body="$(cat <<EOF
+          ## Automated upstream sync (conflict handoff)
+
+          Please merge upper source into this publish repo and open a PR.
+
+          - Upper source: https://github.com/${UPSTREAM_REPO}/tree/${UPSTREAM_REF}
+          - Upstream tip: \`${UPSTREAM_SHA}\`
+          - Base branch: \`main\`
+          - Conflicted paths (pre-check): ${CONFLICTED:-unknown}
+
+          ### Conflict policy
+          1. Integrate upper-source improvements for shared firstmate core.
+          2. Preserve intentional local customizations on this publish fork.
+          3. Combine both sides when the same area changed; never leave conflict markers.
+          4. Open a PR into main titled \`chore: sync upstream from ${UPSTREAM_REPO}\` and apply label \`${SYNC_LABEL}\`.
+
+          Triggered by workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )"
+
+          export GH_TOKEN="$COPILOT_AGENT_TOKEN"
+          custom_instructions="Merge ${UPSTREAM_REPO}@${UPSTREAM_REF} (${UPSTREAM_SHA}) into main, resolve conflicts preserving local customizations, open a PR labeled ${SYNC_LABEL}."
+          query='mutation($repositoryId:ID!, $title:String!, $body:String!, $assigneeIds:[ID!]!, $targetRepositoryId:ID!, $baseRef:String!, $customInstructions:String!) {
+            createIssue(input: {
+              repositoryId: $repositoryId
+              title: $title
+              body: $body
+              assigneeIds: $assigneeIds
+              agentAssignment: {
+                targetRepositoryId: $targetRepositoryId
+                baseRef: $baseRef
+                customInstructions: $customInstructions
+                customAgent: ""
+                model: ""
+              }
+            }) {
+              issue { number url }
+            }
+          }'
+          # Full GraphQL POST body so assigneeIds is a real [ID!] array.
+          payload="$(jq -n \
+            --arg query "$query" \
+            --arg repositoryId "$repo_id" \
+            --arg title "$title" \
+            --arg body "$body" \
+            --arg botId "$bot_id" \
+            --arg targetRepositoryId "$repo_id" \
+            --arg baseRef "main" \
+            --arg customInstructions "$custom_instructions" \
+            '{
+              query: $query,
+              variables: {
+                repositoryId: $repositoryId,
+                title: $title,
+                body: $body,
+                assigneeIds: [$botId],
+                targetRepositoryId: $targetRepositoryId,
+                baseRef: $baseRef,
+                customInstructions: $customInstructions
+              }
+            }')"
+          result="$(curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Authorization: Bearer ${COPILOT_AGENT_TOKEN}" \
+            -H "GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection" \
+            -H "Content-Type: application/json" \
+            https://api.github.com/graphql \
+            -d "$payload")"
+
+          issue_url="$(printf '%s' "$result" | jq -r '.data.createIssue.issue.url // empty')"
+          issue_number="$(printf '%s' "$result" | jq -r '.data.createIssue.issue.number // empty')"
+          if [ -z "$issue_url" ]; then
+            echo "$result" >&2
+            echo "::error::Failed to create/assign Copilot issue."
+            exit 1
+          fi
+          echo "issue_url=${issue_url}" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${issue_number}" >> "$GITHUB_OUTPUT"
+          echo "Assigned Copilot via issue: ${issue_url}"
+
+      - name: Job summary
+        if: always()
+        env:
+          ALREADY: ${{ steps.fetch.outputs.already_up_to_date }}
+          EXISTING_PR: ${{ steps.existing.outputs.pr_url }}
+          CLEAN_PR: ${{ steps.clean_pr.outputs.pr_url }}
+          COPILOT_TASK: ${{ steps.copilot.outputs.task_url || steps.copilot.outputs.task_id }}
+          COPILOT_PR: ${{ steps.copilot.outputs.pr_url }}
+          FALLBACK_ISSUE: ${{ steps.issue_fallback.outputs.issue_url }}
+          MERGE_STATUS: ${{ steps.merge.outputs.status }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicted_files }}
+          UPSTREAM_SHA: ${{ steps.fetch.outputs.upstream_sha }}
+        run: |
+          set -eu
+          {
+            echo "## Sync upstream"
+            echo
+            echo "- Upper source: \`${UPSTREAM_REPO}@${UPSTREAM_REF}\`"
+            echo "- Upstream tip: \`${UPSTREAM_SHA:-unknown}\`"
+            echo "- Already up to date: \`${ALREADY:-unknown}\`"
+            echo "- Local merge status: \`${MERGE_STATUS:-n/a}\`"
+            if [ -n "${CONFLICTS:-}" ]; then
+              echo "- Conflicted files: \`${CONFLICTS}\`"
+            fi
+            if [ -n "${EXISTING_PR:-}" ]; then
+              echo "- Existing open sync PR: ${EXISTING_PR}"
+            fi
+            if [ -n "${CLEAN_PR:-}" ]; then
+              echo "- Clean merge PR: ${CLEAN_PR}"
+            fi
+            if [ -n "${COPILOT_TASK:-}" ]; then
+              echo "- Copilot task: ${COPILOT_TASK}"
+            fi
+            if [ -n "${COPILOT_PR:-}" ]; then
+              echo "- Copilot PR: ${COPILOT_PR}"
+            fi
+            if [ -n "${FALLBACK_ISSUE:-}" ]; then
+              echo "- Copilot issue fallback: ${FALLBACK_ISSUE}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
