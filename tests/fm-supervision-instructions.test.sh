@@ -171,6 +171,24 @@ test_pi_snippet_uses_effective_extension_path() {
   pass "pi supervision snippet renders the effective extension path"
 }
 
+test_omp_snippet_uses_effective_extension_path() {
+  local home out turnend watch
+  home="$TMP_ROOT/omp-home"
+  turnend="$ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
+  watch="$ROOT/.omp/extensions/fm-primary-omp-watch.ts"
+  mkdir -p "$home/state" "$home/config"
+  out=$(FM_HOME="$home" "$RENDER" --harness omp)
+  assert_contains "$out" "-e $turnend -e $watch" "omp snippet did not render both effective extension launch paths"
+  assert_contains "$out" "The turn-end guard extension lives at \`$turnend\`" "omp snippet did not render the turn-end guard extension path"
+  assert_contains "$out" "The watcher extension lives at \`$watch\`" "omp snippet did not render the watcher extension path"
+  assert_contains "$out" "fm_watch_arm_omp" "omp snippet missing the watcher arm tool"
+  assert_not_contains "$out" "__FM_OMP_EXT__" "renderer leaked the omp extension path placeholder"
+  assert_not_contains "$out" "__FM_OMP_TURNEND_EXT__" "renderer leaked the omp turn-end extension path placeholder"
+  out=$(FM_HOME="$home" "$RENDER" --harness omp --repair-line)
+  assert_contains "$out" "fm_watch_arm_omp" "omp repair line does not name the watcher arm tool"
+  pass "omp supervision snippet renders the effective extension path"
+}
+
 test_selected_harness_block_only
 test_unknown_fallback
 test_conditional_stanzas
@@ -180,3 +198,4 @@ test_pi_signed_preserves_identity_with_pi_supervision_protocol
 test_grok_is_background_notify
 test_grok_command_sources_effective_config
 test_pi_snippet_uses_effective_extension_path
+test_omp_snippet_uses_effective_extension_path

@@ -9,7 +9,24 @@
 # This file is sourced by scripts and has no side effects on source.
 
 # Known harness command names; extend when a new adapter is verified.
-FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$'
+FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$|^omp$'
+
+# omp runs either as its own command or as `bun <path>/omp ...`.
+# For bun, only the interpreter's script argument identifies the harness;
+# later `.omp/` config arguments must not self-match.
+fm_args_are_omp() {
+  local comm=$1 args=${2-} script
+  case "$(basename "$comm")" in
+    omp) return 0 ;;
+    bun)
+      IFS=' ' read -r _ script _ <<EOF
+$args
+EOF
+      case "$script" in omp|*/omp) return 0 ;; esac
+      ;;
+  esac
+  return 1
+}
 
 # Walk the current process ancestry (up to 16 hops) and print a harness pid.
 # For every harness except Claude, the first match wins (innermost pid), which
@@ -57,6 +74,12 @@ fm_harness_ancestry_pid() {
     elif [ "$extending" -eq 1 ]; then
       break
     fi
+    # Bare interpreter (e.g. node, bun): match the harness name in its script path.
+    case "$comm" in
+      *node*|*python*|*bun*)
+        fm_args_are_omp "$comm" "$args" && { echo "$pid"; return 0; }
+        printf '%s' "$args" | grep -qE "$FM_HARNESS_RE" && { echo "$pid"; return 0; } ;;
+    esac
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
   done
@@ -69,12 +92,13 @@ fm_harness_pid_alive() {
   local pid=$1 comm args
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
+  args=$(ps -o args= -p "$pid" 2>/dev/null)
+  fm_args_are_omp "$comm" "$args" && return 0
   if printf '%s' "$(basename "$comm")" | grep -qE "$FM_HARNESS_RE"; then
     return 0
   fi
   case "$comm" in
-    *node*|*python*)
-      args=$(ps -o args= -p "$pid" 2>/dev/null)
+    *node*|*python*|*bun*)
       printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"
       ;;
     *) return 1 ;;

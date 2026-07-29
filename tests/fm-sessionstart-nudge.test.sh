@@ -149,7 +149,7 @@ EOF
 }
 
 test_tracked_harness_registration() {
-  local command pi_plugin opencode_plugin
+  local command pi_plugin omp_plugin opencode_plugin
   jq -e '.hooks.SessionStart | length == 1' "$ROOT/.claude/settings.json" >/dev/null \
     || fail "Claude SessionStart hook is not registered exactly once"
   jq -e '.hooks.SessionStart[0].matcher == "startup|resume|clear"' "$ROOT/.claude/settings.json" >/dev/null \
@@ -178,12 +178,18 @@ test_tracked_harness_registration() {
   assert_contains "$pi_plugin" 'details: { kind: "session-start" }' "Pi SessionStart context does not retain its exact structured kind"
   assert_contains "$pi_plugin" 'pi.sendMessage' "Pi SessionStart handler does not use the context-safe message API"
 
+  omp_plugin=$(cat "$ROOT/.omp/extensions/fm-primary-turnend-guard.ts")
+  assert_contains "$omp_plugin" '["", "startup", "new", "resume"]' "omp SessionStart handler has the wrong reason allowlist"
+  assert_contains "$omp_plugin" 'fm-sessionstart-nudge.sh' "omp SessionStart handler does not invoke the wrapper"
+  assert_contains "$omp_plugin" 'firstmate-sessionstart-nudge' "omp SessionStart handler does not inject a custom context message"
+  assert_contains "$omp_plugin" 'pi.sendMessage' "omp SessionStart handler does not use the context-safe message API"
+
   opencode_plugin=$(cat "$ROOT/.opencode/plugins/fm-primary-sessionstart-nudge.js")
   assert_contains "$opencode_plugin" 'session.created' "OpenCode plugin does not listen for session.created"
   assert_contains "$opencode_plugin" 'fm-sessionstart-nudge.sh' "OpenCode plugin does not invoke the wrapper"
   assert_contains "$opencode_plugin" 'promptAsync' "OpenCode plugin does not prompt the nudge turn"
 
-  pass "all five verified harnesses register the shared session-start nudge"
+  pass "all six verified harnesses register the shared session-start nudge"
 }
 
 test_genuine_primary_nudges

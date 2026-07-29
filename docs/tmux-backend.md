@@ -51,9 +51,12 @@ Only `dead` and `missing` authorize recovery because a false dead result could l
 
 The verified Pi Launcher path reports the exact foreground command `pi-launcher` for both pi and pi-signed, while direct executable identities `pi`, `pi-signed`, and `Pi` remain accepted exactly.
 Similar or prefixed process names are not accepted through those exact Pi-family entries.
+Omp runs through a generic `bun` process name, so an existing Omp pane is reported as ambiguous rather than auto-healed, while an authoritatively missing window can be relaunched safely.
+This is the active tmux liveness limitation.
 
 Agent liveness and composer safety are separate checks.
 For a bordered composer, the tmux reader locates the complete box structurally and classifies every content row through the shared ANSI and ghost handling in `bin/fm-composer-lib.sh`.
+Omp's verified `╭── π > ...╮` composer is the supported exception whose content lives inside the `╰─ ... ─╯` bottom border row.
 Real text on any content row is pending, while only an unambiguous box with every row empty is proven empty.
 Unreadable, incomplete, or structurally ambiguous boxes fail closed, and panes without a bordered composer retain the compatible cursor-row classification.
 The shared classifier accepts a shell glyph as an empty agent composer only inside a verified bordered composer.
@@ -78,6 +81,7 @@ Ambiguous pending text never receives the busy-queue conversion.
 ## Limits and regression entry points
 
 - tmux is the reference path and supports secondmate homes.
+- The active agent-liveness limitations are described in [Current behavior and safety](#current-behavior-and-safety).
 - The OpenCode busy-queue exception is tmux-specific; Herdr retains its separately documented gap.
 
 ```sh

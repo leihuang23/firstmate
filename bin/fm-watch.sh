@@ -107,6 +107,8 @@ SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trai
 # a recorded Claude task because an ellipsis followed by elapsed time is not a
 # safe shared signature for arbitrary harness output. Kimi's moon-plus-middot
 # spinner signature is likewise matched only for a recorded Kimi task.
+# Omp's "Working…" U+2026-ellipsis line is likewise matched only for a recorded
+# omp task (bin/fm-tmux-lib.sh owns the per-harness signatures).
 BUSY_REGEX=${FM_BUSY_REGEX:-'esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'}
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
