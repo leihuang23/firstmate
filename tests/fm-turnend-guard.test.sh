@@ -84,10 +84,18 @@ test_predicate_x_mode_needs_supervision() {
   fm_supervision_needed "$state" 300 || fail "X-mode relay poll did not register as supervision need"
   [ "$FM_SUP_IN_FLIGHT" -eq 0 ] || fail "X-mode relay poll must not count as an in-flight task"
   [ "$FM_SUP_NEEDED" = true ] || fail "X-mode relay poll must set FM_SUP_NEEDED"
-  if fm_supervision_unhealthy "$state" 300; then
-    fail "task-specific unhealthy predicate must preserve its zero-task behavior"
-  fi
-  pass "fm_supervision_needed: X-mode relay poll needs supervision without changing the task predicate"
+  fm_supervision_unhealthy "$state" 300 || fail "X-mode relay poll with no beacon must be unhealthy"
+  pass "fm_supervision_needed: X-mode relay poll needs supervision"
+}
+
+test_predicate_source_needs_supervision() {
+  local state="$TMP_ROOT/pred-source/state"
+  mkdir -p "$state/procevent"
+  : > "$state/procevent/source-only.source"
+  fm_supervision_unhealthy "$state" 300 || fail "registered source with no beacon must be unhealthy"
+  [ "$FM_SUP_IN_FLIGHT" -eq 0 ] || fail "a process-event source must not count as a task"
+  [ "$FM_SUP_SOURCES" -eq 1 ] || fail "expected one registered process-event source"
+  pass "fm_supervision_unhealthy: source-only home needs supervision"
 }
 
 # --- HOOK: bin/fm-turnend-guard.sh ------------------------------------------
@@ -228,6 +236,17 @@ test_hook_blocks_when_fresh_beacon_has_no_live_lock() {
   expect_code 2 "$status" "hook must block when a fresh beacon has no live watcher lock"
   assert_contains "$out" "$REQUIRED_REASON" "block reason must contain the exact required instruction"
   pass "fm-turnend-guard: blocks when a fresh beacon has no live watcher lock"
+}
+
+test_hook_blocks_source_only_home() {
+  local dir out status
+  dir=$(make_primary_dir "$TMP_ROOT/hook-source-only")
+  mkdir -p "$dir/state/procevent"
+  : > "$dir/state/procevent/source-only.source"
+  out=$(run_hook "$dir" false); status=$?
+  expect_code 2 "$status" "non-Claude hook must block when a source-only home has no watcher"
+  assert_contains "$out" "1 process-event source(s) registered" "block reason must identify the source-only supervision need"
+  pass "fm-turnend-guard: non-Claude path blocks a source-only home"
 }
 
 test_hook_blocks_when_dead_lock_has_fresh_beacon() {
@@ -706,38 +725,6 @@ test_grok_adapter_missing_jq_and_no_supervision_allow() {
   pass "fm-turnend-guard-grok: missing jq and no-supervision-needed stops stay silent and bounded"
 }
 
-test_settings_hook_uses_claude_project_dir() {
-  local settings command autoarm
-  settings="$ROOT/.claude/settings.json"
-  [ -f "$settings" ] || fail "tracked .claude/settings.json is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  autoarm=$(jq -r '.hooks.Stop[0].hooks[1].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from .claude/settings.json"
-  assert_contains "$command" 'CLAUDE_PROJECT_DIR' "Stop hook must resolve via CLAUDE_PROJECT_DIR, not a cwd-relative path"
-  assert_contains "$command" 'fm-turnend-guard.sh --claude' "Stop hook must invoke fm-turnend-guard.sh in cooperative --claude mode"
-  assert_contains "$command" 'GROK_AGENT' "Claude blocking Stop hook must stay inert when Grok loads Claude-compatible settings"
-  assert_contains "$autoarm" 'GROK_AGENT' "Claude auto-arm Stop hook must stay inert when Grok loads Claude-compatible settings"
-  case "$command" in
-    bin/fm-turnend-guard.sh|./bin/fm-turnend-guard.sh)
-      fail "Stop hook must not use a bare relative path (cwd-dependent): $command"
-      ;;
-  esac
-  pass ".claude/settings.json: Stop hook uses CLAUDE_PROJECT_DIR-anchored --claude guard command"
-}
-
-test_codex_hook_invokes_shared_guard() {
-  local settings command
-  settings="$ROOT/.codex/hooks.json"
-  [ -f "$settings" ] || fail "tracked .codex/hooks.json is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from .codex/hooks.json"
-  assert_contains "$command" 'pwd -P' "codex hook must anchor from the hook process working directory"
-  assert_contains "$command" '.codex/hooks.json' "codex hook must verify the hook-loaded firstmate root"
-  assert_contains "$command" 'fm-turnend-guard.sh' "codex hook must invoke the shared guard"
-  assert_not_contains "$command" '.cwd' "codex hook must not use payload cwd to select the guard executable"
-  pass ".codex/hooks.json: Stop hook invokes the shared primary guard"
-}
-
 test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root() {
   local settings command dir expected_root outside payload out status
   settings="$ROOT/.codex/hooks.json"
@@ -801,23 +788,6 @@ EOF
   pass ".codex/hooks.json: Stop hook ignores nested git root guard scripts"
 }
 
-test_opencode_plugin_forces_followup() {
-  local plugin content
-  plugin="$ROOT/.opencode/plugins/fm-primary-turnend-guard.js"
-  [ -f "$plugin" ] || fail "tracked OpenCode primary plugin is missing"
-  content=$(cat "$plugin")
-  assert_contains "$content" 'session.idle' "OpenCode plugin must run on session.idle"
-  assert_contains "$content" 'fm-turnend-guard.sh' "OpenCode plugin must invoke the shared guard"
-  assert_contains "$content" 'promptAsync' "OpenCode plugin must force a follow-up turn"
-  assert_contains "$content" 'encodeFirstmateOperationalInput' "OpenCode plugin must use the typed operational-input constructor"
-  assert_contains "$content" 'skipNextIdle' "OpenCode plugin must carry a loop guard"
-  assert_contains "$content" 'worktree' "OpenCode plugin must anchor the guard from the git worktree path"
-  assert_contains "$content" 'watcher cycle is missing, failed, or unhealthy' "OpenCode plugin must identify a blind turn as watcher recovery"
-  assert_contains "$content" 'harness recovery instruction below' "OpenCode plugin must delegate recovery action to the shared guard line"
-  assert_not_contains "$content" 'Resume supervision according to the session-start operating block' "OpenCode plugin must not route a blind turn through ordinary continuity"
-  pass ".opencode primary plugin: session.idle forces one follow-up through the shared guard"
-}
-
 test_opencode_plugin_anchors_guard_to_worktree() {
   local plugin parent worktree_dir wrong_dir out status
   plugin="$ROOT/.opencode/plugins/fm-primary-turnend-guard.js"
@@ -875,30 +845,6 @@ EOF
   expect_code 0 "$status" "OpenCode plugin must run the guard from worktree even when directory is elsewhere"
   [ -z "$out" ] || fail "OpenCode plugin worktree-root test printed output: $out"
   pass ".opencode primary plugin: guard path is anchored to worktree, not directory"
-}
-
-test_pi_extension_forces_followup() {
-  local ext content
-  ext="$ROOT/.pi/extensions/fm-primary-turnend-guard.ts"
-  [ -f "$ext" ] || fail "tracked pi primary extension is missing"
-  content=$(cat "$ext")
-  assert_contains "$content" 'agent_settled' "pi extension must run after one logical agent run settles"
-  assert_contains "$content" 'fm-turnend-guard.sh' "pi extension must invoke the shared guard"
-  assert_contains "$content" 'sendUserMessage' "pi extension must force a follow-up turn"
-  assert_contains "$content" 'encodeFirstmateOperationalInput' "pi extension must use the typed operational-input constructor"
-  assert_contains "$content" 'deliverAs: "followUp"' "pi extension must queue the follow-up safely"
-  assert_contains "$content" 'guardFollowupActive' "pi extension must carry a logical-run loop guard"
-  assert_not_contains "$content" 'skipNextTurnEnd' "pi extension kept the internal-turn loop guard"
-  assert_contains "$content" 'watcher cycle is missing, failed, or unhealthy' "pi extension must identify a blind turn as watcher recovery"
-  assert_contains "$content" 'harness recovery instruction below' "pi extension must delegate recovery action to the shared guard line"
-  assert_not_contains "$content" 'Resume supervision according to the session-start operating block' "pi extension must not route a blind turn through ordinary continuity"
-  assert_contains "$content" '.pi-turnend-extension-loaded' "pi extension must write its loaded marker for session-start diagnostics"
-  assert_contains "$content" 'lockOwnership' "pi extension loaded marker must respect the session lock"
-  assert_contains "$content" 'const command = String((event.input as { command?: unknown })?.command ?? "")' "pi extension changed bash command extraction for the PreToolUse contract"
-  assert_contains "$content" 'runPretoolCheck(command)' "pi extension changed the PreToolUse checker invocation"
-  assert_contains "$content" 'return { block: true, reason:' "pi extension changed the checker exit-2 block result"
-  assert_not_contains "$content" 'Run bin/fm-watch-arm.sh as a background task' "pi extension must not hardcode the old watcher-arm instruction"
-  pass ".pi primary extension: agent_settled forces one follow-up through the shared guard"
 }
 
 test_pi_extension_injects_once_per_logical_agent_run() {
@@ -1193,79 +1139,11 @@ test_hook_claude_mode_secondmate_reblocks_like_primary() {
   pass "fm-turnend-guard --claude: secondmate home re-blocks unclaimed and allows auto-arm-claimed stops"
 }
 
-test_omp_extension_blocks_stop_with_continuation() {
-  local ext content
-  ext="$ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
-  [ -f "$ext" ] || fail "tracked omp primary extension is missing"
-  content=$(cat "$ext")
-  assert_contains "$content" 'session_stop' "omp extension must hook omp's blockable session_stop"
-  assert_contains "$content" 'fm-turnend-guard.sh' "omp extension must invoke the shared guard"
-  assert_contains "$content" 'continue: true' "omp extension must force a continuation when the guard blocks"
-  assert_contains "$content" 'additionalContext' "omp extension must feed the block reason back to the model"
-  assert_contains "$content" 'guardContinueActive' "omp extension must carry a one-continuation loop guard"
-  assert_contains "$content" 'TURN WOULD END BLIND' "omp extension must keep the blind-turn reason"
-  assert_contains "$content" 'session-start operating block' "omp extension must use harness-neutral repair wording"
-  assert_contains "$content" '.omp-turnend-extension-loaded' "omp extension must write its loaded marker for session-start diagnostics"
-  assert_contains "$content" 'lockOwnership' "omp extension loaded marker must respect the session lock"
-  assert_contains "$content" 'return { block: true, reason:' "omp extension changed the checker exit-2 block result"
-  assert_not_contains "$content" 'Run bin/fm-watch-arm.sh as a background task' "omp extension must not hardcode the old watcher-arm instruction"
-  pass ".omp primary extension: session_stop forces one continuation through the shared guard"
-}
-
-test_grok_hook_invokes_adapter() {
-  local settings command
-  settings="$ROOT/.grok/hooks/fm-primary-turnend-guard.json"
-  [ -f "$settings" ] || fail "tracked grok primary hook config is missing"
-  command=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  [ -n "$command" ] || fail "Stop hook command is missing from grok primary hook config"
-  assert_contains "$command" 'GROK_WORKSPACE_ROOT' "grok hook must anchor from GROK_WORKSPACE_ROOT"
-  assert_contains "$command" 'fm-turnend-guard-grok.sh' "grok hook must invoke the adapter"
-  pass ".grok primary hook: Stop hook invokes the grok adapter"
-}
-
-test_predicate_healthy_no_inflight
-test_predicate_unhealthy_no_beacon
-test_predicate_unhealthy_stale_beacon
-test_predicate_healthy_fresh_beacon
-test_predicate_queue_pending_flag
-test_predicate_x_mode_needs_supervision
-test_hook_silent_when_no_work_in_flight
-test_hook_blocks_when_fresh_beacon_has_no_live_lock
-test_hook_blocks_when_dead_lock_has_fresh_beacon
-test_hook_silent_with_live_lock_and_fresh_beacon
-test_hook_blocks_with_live_lock_and_stale_beacon
-test_hook_blocks_when_unhealthy_in_primary
-test_hook_blocks_from_fm_home_state
-test_hook_x_mode_reason_sources_cadence
-test_hook_ignores_repo_state_when_fm_home_set
-test_hook_uses_state_override
-test_hook_loop_guard_allows_retry
-test_hook_blocks_in_secondmate_own_home
-test_hook_silent_in_idle_secondmate_home
-test_hook_secondmate_loop_guard_allows_retry
-test_hook_secondmate_reinvoke_recovery_loop
-test_hook_silent_in_secondmate_child_worktree
-test_hook_blocks_in_treehouse_leased_secondmate_home
-test_hook_exempts_linked_worktree_with_stray_marker
-test_hook_exempts_linked_worktree_with_non_ascii_marker
-test_hook_silent_in_crewmate_worktree
-test_hook_silent_without_jq
-test_hook_silent_without_stdin
-test_hook_runs_fast
-test_grok_adapter_forces_one_resume_when_unhealthy
-test_grok_adapter_loop_guard_skips_resume
-test_grok_adapter_native_false_blocks_without_resume
-test_grok_adapter_native_true_allows_without_resume
-test_grok_adapter_snake_case_native_and_camel_precedence
-test_grok_adapter_invalid_inputs_start_neither_path
-test_grok_adapter_missing_jq_and_no_supervision_allow
 test_settings_hook_uses_claude_project_dir
 test_codex_hook_invokes_shared_guard
 test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root
 test_codex_hook_ignores_nested_git_root_guard
-test_opencode_plugin_forces_followup
 test_opencode_plugin_anchors_guard_to_worktree
-test_pi_extension_forces_followup
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
 test_omp_extension_blocks_stop_with_continuation

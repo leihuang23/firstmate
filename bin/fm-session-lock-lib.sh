@@ -48,7 +48,7 @@ fm_harness_ancestry_pid() {
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     args=$(ps -o args= -p "$pid" 2>/dev/null)
-    bc=$(basename "$comm")
+    bc=$(basename -- "$comm")
     hit=0; is_claude=0
     if printf '%s' "$bc" | grep -qE "$FM_HARNESS_RE"; then
       hit=1
@@ -74,12 +74,6 @@ fm_harness_ancestry_pid() {
     elif [ "$extending" -eq 1 ]; then
       break
     fi
-    # Bare interpreter (e.g. node, bun): match the harness name in its script path.
-    case "$comm" in
-      *node*|*python*|*bun*)
-        fm_args_are_omp "$comm" "$args" && { echo "$pid"; return 0; }
-        printf '%s' "$args" | grep -qE "$FM_HARNESS_RE" && { echo "$pid"; return 0; } ;;
-    esac
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [ -n "$pid" ] && [ "$pid" -gt 1 ] || break
   done
@@ -92,13 +86,12 @@ fm_harness_pid_alive() {
   local pid=$1 comm args
   kill -0 "$pid" 2>/dev/null || return 1
   comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
-  args=$(ps -o args= -p "$pid" 2>/dev/null)
-  fm_args_are_omp "$comm" "$args" && return 0
-  if printf '%s' "$(basename "$comm")" | grep -qE "$FM_HARNESS_RE"; then
+  if printf '%s' "$(basename -- "$comm")" | grep -qE "$FM_HARNESS_RE"; then
     return 0
   fi
   case "$comm" in
-    *node*|*python*|*bun*)
+    *node*|*python*)
+      args=$(ps -o args= -p "$pid" 2>/dev/null)
       printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"
       ;;
     *) return 1 ;;

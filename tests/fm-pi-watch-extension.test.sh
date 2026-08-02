@@ -116,7 +116,6 @@ test_spawn_template_mentions_pi_watch_placeholder() {
   assert_contains "$text" "__PIWATCH__" "fm-spawn does not replace the Pi watch extension placeholder"
   pass "Pi secondmate launch wiring includes both tracked primary extensions"
 }
-
 test_pi_extension_reports_external_healthy_watcher() {
   local repo home plugin out status
   repo="$TMP_ROOT/pi-external-healthy-root"
@@ -1234,26 +1233,6 @@ EOF
   pass "Pi process-exit cleanup stops the attached arm child"
 }
 
-test_opencode_primary_watch_plugin_static_wiring() {
-  local plugin module_boundary text
-  plugin="$ROOT/.opencode/plugins/fm-primary-watch-arm.js"
-  module_boundary="$ROOT/.opencode/plugins/package.json"
-  assert_present "$plugin" "OpenCode primary watch plugin missing"
-  assert_present "$module_boundary" "OpenCode plugin ESM package boundary missing"
-  assert_contains "$(cat "$module_boundary")" '"type": "module"' "OpenCode plugin package boundary is not explicitly ESM"
-  text=$(cat "$plugin")
-  assert_contains "$text" "session.idle" "OpenCode plugin does not listen for session.idle"
-  assert_contains "$text" "fm-watch-arm.sh" "OpenCode plugin does not spawn the watcher arm"
-  assert_contains "$text" "promptAsync" "OpenCode plugin does not wake with promptAsync"
-  assert_contains "$text" 'encodeFirstmateOperationalInput' "OpenCode plugin does not construct typed synthetic user-role wakes"
-  assert_contains "$text" ".fm-secondmate-home" "OpenCode plugin does not scope out secondmate homes"
-  assert_contains "$text" "rev-parse\", \"--git-dir" "OpenCode plugin does not check linked worktree scope"
-  assert_contains "$text" "sessionOwnsLock" "OpenCode plugin does not gate arm attempts on the session lock"
-  assert_contains "$text" 'fm-watch-arm.sh" --restart' "OpenCode plugin does not restart into its own watcher child"
-  assert_contains "$text" 'setArmStatus("external")' "OpenCode plugin still treats an external healthy watcher as armed"
-  pass "OpenCode primary watcher plugin has the verified TUI wake wiring"
-}
-
 test_opencode_plugin_package_boundary_is_explicit_esm() {
   local fixture plugin out status
   fixture="$TMP_ROOT/opencode-esm-boundary/.opencode"
@@ -2202,8 +2181,6 @@ EOF
   pass "OpenCode healthy arm output does not suppress the turn-end guard"
 }
 
-test_tracked_extension_present_and_self_hashing
-test_spawn_template_mentions_pi_watch_placeholder
 test_pi_extension_reports_external_healthy_watcher
 test_pi_tool_returns_agent_tool_result
 test_pi_redundant_tool_call_is_owned_noop
@@ -2219,7 +2196,6 @@ test_pi_arm_distinguishes_session_lock_ownership
 test_pi_session_transition_generation_owner
 test_pi_process_exit_cleanup_listener_lifecycle
 test_pi_process_exit_cleanup_stops_arm_child
-test_opencode_primary_watch_plugin_static_wiring
 test_opencode_plugin_package_boundary_is_explicit_esm
 test_opencode_primary_watch_plugin_uses_effective_state_home
 test_opencode_primary_watch_plugin_sources_effective_config

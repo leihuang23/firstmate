@@ -51,36 +51,6 @@ Only `dead` and `missing` authorize recovery because a false dead result could l
 
 The verified Pi Launcher path reports the exact foreground command `pi-launcher` for both pi and pi-signed, while direct executable identities `pi`, `pi-signed`, and `Pi` remain accepted exactly.
 Similar or prefixed process names are not accepted through those exact Pi-family entries.
-Omp runs through a generic `bun` process name, so an existing Omp pane is reported as ambiguous rather than auto-healed, while an authoritatively missing window can be relaunched safely.
-This is the active tmux liveness limitation.
-
-Agent liveness and composer safety are separate checks.
-For a bordered composer, the tmux reader locates the complete box structurally and classifies every content row through the shared ANSI and ghost handling in `bin/fm-composer-lib.sh`.
-Omp's verified `╭── π > ...╮` composer is the supported exception whose content lives inside the `╰─ ... ─╯` bottom border row.
-Real text on any content row is pending, while only an unambiguous box with every row empty is proven empty.
-Unreadable, incomplete, or structurally ambiguous boxes fail closed, and panes without a bordered composer retain the compatible cursor-row classification.
-The shared classifier accepts a shell glyph as an empty agent composer only inside a verified bordered composer.
-A bare shell prompt is `unknown`, so away-mode escalation is never injected into a dead shell.
-
-Rendered busy detection is also harness-scoped.
-Task metadata selects only that harness's verified signature, so output from one harness cannot make another harness appear busy.
-The exact selection contract and safety rationale live in [architecture](architecture.md#runtime-session-backends), while the signatures live in [the harness-adapters skill](../.agents/skills/harness-adapters/SKILL.md).
-
-`bin/fm-tmux-lib.sh` owns exact type-and-submit mechanics.
-It types a message once and retries Enter only until the composer clears.
-Only a proven empty composer is a positive delivery acknowledgement.
-Text left in established structure remains `pending`, text in ambiguous structure remains unproven, and unreadable or unsafe state remains unknown.
-`fm-send.sh` reports every unconfirmed verdict as a failure instead of retyping or assuming delivery.
-
-OpenCode 1.18.4 has one busy-queue exception.
-While OpenCode is mid-turn, Enter queues the message but leaves its text visible until the turn completes.
-After the normal retry budget, only structurally proven pending text in a provably busy pane is accepted as queued, while an idle pane remains `pending` as a genuine swallowed Enter.
-Ambiguous pending text never receives the busy-queue conversion.
-`tests/fm-tmux-submit-busy.test.sh` covers busy and idle panes with proven, ambiguous, and cleared composers.
-
-## Limits and regression entry points
-
-- tmux is the reference path and supports secondmate homes.
 - The active agent-liveness limitations are described in [Current behavior and safety](#current-behavior-and-safety).
 - The OpenCode busy-queue exception is tmux-specific; Herdr retains its separately documented gap.
 
