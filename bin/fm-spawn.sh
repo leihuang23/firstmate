@@ -480,6 +480,43 @@ launch_template() {
         printf '%s%s' "$harness" ' __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
         printf '%s%s' "$harness" ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+      fi
+      ;;
+    # omp (Oh My Pi, binary `omp`, a pi-mono fork): a positional prompt starts
+    # the supervised interactive session (verified 2026-07-26 on 17.1.3).
+    # --auto-approve skips every tool-approval prompt, which an unattended
+    # crewmate needs. omp loads explicit -e extension paths without any trust
+    # gate (verified), so the turn-end extension rides the launch line exactly
+    # like pi's. omp has no permission-free default, so --auto-approve stays on
+    # both kinds.
+    omp)
+      if [ "$kind" = secondmate ]; then
+        printf '%s' 'omp --auto-approve __MODELFLAG____EFFORTFLAG__-e __OMPTURNEND__ -e __OMPWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' 
+      else
+        printf '%s' 'omp --auto-approve __MODELFLAG____EFFORTFLAG__-e __OMPEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' 
+      fi
+      ;;
+    # grok (Grok Build TUI): a positional prompt starts the supervised interactive
+    # session. --always-approve auto-approves every tool execution (verified: the
+    # crewmate runs fully autonomously, no permission gate), which an unattended
+    # crewmate needs; it is the targeted equivalent of claude's
+    # --dangerously-skip-permissions. grok's turn-end signal does NOT ride the
+    # launch command - it is a Stop-event hook installed below (global hook +
+    # per-task pointer), so the template is identical for ship/scout/secondmate.
+    grok) printf '%s' 'grok --always-approve __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    # Kimi Code rejects a positional prompt, so it launches bare and receives
+    # only an absolute brief pointer after the TUI readiness gate below.
+    # Its turn-end signal is a globally configured Stop hook plus a guarded
+    # per-task worktree token, so no launch placeholder belongs here.
+    kimi) printf '%s' '__KIMIBIN__ __MODELFLAG__--auto' ;;
+    *) return 1 ;;
+  esac
+}
+
+model_flag_for_harness() {
+  local harness=$1 model=$2
+  [ -n "$model" ] && [ "$model" != default ] || return 0
+  case "$harness" in
     claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
