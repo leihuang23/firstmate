@@ -47,30 +47,8 @@ Observed result: `PI_SMOKE_DONE`, with one session-start execution.
 The earlier `sendUserMessage` counterfactual raced the positional prompt; the current non-triggering `pi.sendMessage` custom message did not.
 The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
 [`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
-<<<<<<< HEAD
-=======
-
-
-Omp 17.1.3 ran on 2026-07-26 with the tracked `.omp/extensions/fm-primary-turnend-guard.ts` auto-discovered from the checkout (no trust gate).
-Command shape:
-
-```sh
-omp -p --no-session 'Call the fm_watch_arm_omp tool now, then reply with exactly DONE.'
-```
-
-Observed result: the injected `pi.sendMessage` nudge reached the model and was obeyed (it ran session start, which correctly resolved read-only against the live lock holder), and the same session's watcher tool returned the read-only refusal.
-
->>>>>>> origin/main
-
-Current deterministic and live entry points:
-
-```sh
-tests/fm-sessionstart-nudge.test.sh
-<<<<<<< HEAD
-=======
 tests/fm-captain-translation-contract.test.sh
 tests/fm-omp-watch-extension.test.sh
->>>>>>> origin/main
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
 FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh
 ```
@@ -123,10 +101,7 @@ The direct and passive mechanisms were validated across all six harnesses on 202
 | Codex | 0.142.1 | Blocking `Stop` hook | Hook process root stayed anchored to the trusted checkout and one continuation ran. |
 | OpenCode | 1.17.6 | Passive `session.idle` callback | Throwing could not block, while `promptAsync` scheduled one TUI follow-up; headless remained fail-open. |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
-<<<<<<< HEAD
-=======
 | Omp | 17.1.3 | Blocking `session_stop` extension event | `{ continue: true, additionalContext }` forced one continuation in print mode; with fake in-flight work and no watcher the continuation ran session start (acquiring the lock through the omp bun-ancestry detection) and armed the watcher through `fm_watch_arm_omp`. The extension latch allowed the continuation's own stop exactly once, and omp caps consecutive continuations at 8. |
->>>>>>> origin/main
 | Grok | 0.2.112 native and 0.2.73 pre-native | Running-payload adaptive `Stop` | Native false-to-true continuation stayed in one process with two model turns and zero resume launches; the field-absent pre-native process launched exactly one guarded resume. |
 
 The Grok adaptive matrix ran on 2026-07-28 with separate scratch repositories and homes, dedicated tmux sockets, one target plus one control window, ambient tmux variables removed, and a socket-bound wrapper first in `PATH`.

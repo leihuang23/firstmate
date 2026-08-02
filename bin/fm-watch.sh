@@ -116,11 +116,6 @@ CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trailing
                                       # signals (a status write, then the same turn's
                                       # turn-end hook) coalesce into one wake
-<<<<<<< HEAD
-# Busy state is decided by the semantic contract in bin/fm-busy-lib.sh, which
-# is the single owner of per-harness sources, source attribution, and the one
-# remaining rendered-text fallback (Grok only).
-=======
 # Busy signatures are selected by recorded harness unless FM_BUSY_REGEX globally
 # overrides them.
 # claude/codex: "esc to interrupt"; opencode: "esc interrupt"; pi: "Working...";
@@ -131,7 +126,6 @@ SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trai
 # Omp's "Working…" U+2026-ellipsis line is likewise matched only for a recorded
 # omp task (bin/fm-tmux-lib.sh owns the per-harness signatures).
 BUSY_REGEX=${FM_BUSY_REGEX:-'esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'}
->>>>>>> origin/main
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
 # than wake firstmate's LLM for each, this watcher classifies every wake in bash

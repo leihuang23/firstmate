@@ -136,22 +136,9 @@ budget_reset() {
 }
 
 fm_supervision_status "$STATE" "$GRACE"
-<<<<<<< HEAD
 if [ "$FM_SUP_NEEDED" = false ]; then
   budget_reset
   exit 0
-=======
-if [ "$CLAUDE_MODE" -eq 1 ] || [ "$OMP_MODE" -eq 1 ]; then
-  if [ "$FM_SUP_NEEDED" = false ]; then
-    budget_reset
-    exit 0
-  fi
-else
-  if [ "$FM_SUP_IN_FLIGHT" -eq 0 ]; then
-    budget_reset
-    exit 0
-  fi
->>>>>>> origin/main
 fi
 if fm_watcher_healthy "$STATE" "$WATCH" "$GRACE" "$FM_HOME"; then
   budget_reset

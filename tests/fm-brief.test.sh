@@ -261,7 +261,6 @@ test_no_mistakes_dod_wording() {
   # shellcheck disable=SC2016  # single quotes are deliberate: the backticks must stay literal
   assert_grep '`help`' "$brief" \
     "no-mistakes DOD must render literal backticks around help"
-<<<<<<< HEAD
   assert_grep "make \`--intent\` preserve all relevant content from this brief" "$brief" \
     "no-mistakes DOD must require --intent to retain the accepted task contract"
   assert_grep "carrying only each requirement's current accepted form" "$brief" \
@@ -270,8 +269,6 @@ test_no_mistakes_dod_wording() {
     "no-mistakes DOD must keep direct requirements and exclude generic scaffold boilerplate from --intent"
   assert_grep "exclude generic operational, status, delivery, and other scaffold boilerplate unless it is task-specific" "$brief" \
     "no-mistakes DOD must exclude non-task-specific scaffold boilerplate from --intent"
-=======
->>>>>>> origin/main
   # The apostrophe in "firstmate's authority check" is now structurally safe
   # (no `$(...)` wrapper around the heredoc), so it renders verbatim instead of
   # being reworded or escaped away. test_no_heredoc_in_command_substitution

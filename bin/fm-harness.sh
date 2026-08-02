@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-<<<<<<< HEAD
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|unknown
-=======
 # Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|omp|unknown
->>>>>>> origin/main
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch

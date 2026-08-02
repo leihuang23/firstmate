@@ -77,10 +77,7 @@ Backend applicability was reviewed across every spawn adapter.
 Tmux needs the exact `pi-launcher`, `pi-signed`, `pi`, and `Pi` process identities for recovery-grade liveness.
 Herdr uses native registered-agent state and needs no process-name branch.
 Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those three retain their existing generic ordinary-launch semantics without a new liveness matcher.
-<<<<<<< HEAD
-=======
 Oh My Pi 17.1.3 was observed as a generic `bun` process on 2026-07-26 (the binary is a `#!/usr/bin/env bun` script) and is intentionally inconclusive for that separate generic-interpreter reason; callers never treat `unknown` as dead.
->>>>>>> origin/main
 
 The structural multi-row composer reader, Kimi pointer-delivery path, and OpenCode 1.18.4 busy-queue behavior are pinned by:
 

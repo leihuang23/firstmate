@@ -14,12 +14,8 @@
 #      explicit per-spawn harness arg still wins.
 #   B) Inheritance. The primary pushes a declared, extensible set of LOCAL
 #      (gitignored) config items - config/crew-dispatch.json, config/crew-harness,
-<<<<<<< HEAD
 #      config/backlog-backend, config/backend, config/herdr-presentation-spaces, and
 #      config/startup-memory-budget -
-=======
-#      config/backlog-backend, config/backend, and config/herdr-presentation-spaces -
->>>>>>> origin/main
 #      down into each secondmate home's config/, so the secondmate's OWN crewmates,
 #      dispatch profiles, backlog backend, runtime-backend default, and Herdr
 #      presentation opt-in inherit the primary's settings. It is primary-authoritative
@@ -173,7 +169,6 @@ esac
 SH
   chmod +x "$fakebin/ps"
 
-<<<<<<< HEAD
   got=$(env -u CLAUDECODE -u GROK_AGENT PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true "$ROOT/bin/fm-harness.sh")
   [ "$got" = pi ] || fail "unmarked shared signed-wrapper ancestry resolved '$got', expected pi"
   got=$(env -u CLAUDECODE -u GROK_AGENT PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed "$ROOT/bin/fm-harness.sh")
@@ -187,21 +182,6 @@ SH
   got=$(env -u CLAUDECODE -u GROK_AGENT PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_TEST_SIGNED_SHAPE=plain "$ROOT/bin/fm-harness.sh")
   [ "$got" = pi ] || fail "plain Pi marker resolved '$got', expected pi"
   got=$(env -u CLAUDECODE -u GROK_AGENT PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_TEST_SIGNED_SHAPE=helper "$ROOT/bin/fm-harness.sh")
-=======
-  got=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "unmarked shared signed-wrapper ancestry resolved '$got', expected pi"
-  got=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi-signed ] || fail "selected signed wrapper resolved '$got', expected pi-signed"
-  got=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "selected plain Pi resolved '$got', expected pi"
-  got=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_PI_HARNESS=pi-signed-helper "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "inexact signed selection marker resolved '$got', expected pi"
-  got=$(PATH="$fakebin:$BASE_PATH" FM_PI_HARNESS=pi-signed "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "signed selection marker without Pi's family marker resolved '$got', expected pi"
-  got=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_TEST_SIGNED_SHAPE=plain "$ROOT/bin/fm-harness.sh")
-  [ "$got" = pi ] || fail "plain Pi marker resolved '$got', expected pi"
-  got=$(PATH="$fakebin:$BASE_PATH" PI_CODING_AGENT=true FM_TEST_SIGNED_SHAPE=helper "$ROOT/bin/fm-harness.sh")
->>>>>>> origin/main
   [ "$got" = pi ] || fail "unrelated pi-signed-helper ancestry resolved '$got', expected pi"
 
   got=$(PATH="$fakebin:$BASE_PATH" bash -c \
@@ -218,7 +198,6 @@ SH
   pass "pi-signed identity: authoritative launch selection distinguishes shared wrapper ancestry"
 }
 
-<<<<<<< HEAD
 test_dash_leading_process_names_are_basename_operands() {
   local dir fakebin got err status
   dir="$TMP_ROOT/dash-leading-process-names"
@@ -270,8 +249,6 @@ SH
   pass "harness identity: dash-leading ps command names are basename operands, not options"
 }
 
-=======
->>>>>>> origin/main
 # ===========================================================================
 # B) propagate_inheritable_config unit behavior
 # ===========================================================================
@@ -916,11 +893,7 @@ new_world() {
     printf 'projects/\nstate/\ndata/\n.no-mistakes/\n'
     [ "$dispatch_ignore" = no ] || printf 'config/crew-dispatch.json\n'
     printf 'config/crew-harness\nconfig/secondmate-harness\nconfig/backlog-backend\n'
-<<<<<<< HEAD
     printf 'config/backend\nconfig/herdr-presentation-spaces\nconfig/startup-memory-budget\n'
-=======
-    printf 'config/backend\nconfig/herdr-presentation-spaces\n'
->>>>>>> origin/main
   } > "$w/main/.gitignore"
   printf 'v1\n' > "$w/main/AGENTS.md"
   printf 'r1\n' > "$w/main/README.md"
@@ -1230,7 +1203,6 @@ test_bootstrap_sweep_materializes_and_inherits_memory_default() {
 
   run_bootstrap "$w" >/dev/null
 
-<<<<<<< HEAD
   [ -e "$w/sm/config/crew-dispatch.json" ] && fail "default-only sweep created a home crew-dispatch.json"
   [ -e "$w/sm/config/crew-harness" ] && fail "default-only sweep created a home crew-harness"
   [ -e "$w/sm/config/backend" ] && fail "default-only sweep created a home backend"
@@ -1238,51 +1210,9 @@ test_bootstrap_sweep_materializes_and_inherits_memory_default() {
     || fail "primary bootstrap did not materialize the startup-memory default"
   [ "$(cat "$w/sm/config/startup-memory-budget")" = 7500 ] \
     || fail "default-only sweep did not converge startup-memory-budget"
-=======
-  [ -e "$w/sm/config/crew-dispatch.json" ] && fail "no-inheritance sweep created a home crew-dispatch.json"
-  [ -e "$w/sm/config/crew-harness" ] && fail "no-inheritance sweep created a home crew-harness"
-  [ -e "$w/sm/config/backend" ] && fail "no-inheritance sweep created a home backend"
-  [ -e "$w/sm/config" ] && fail "no-inheritance sweep created a home config/ dir"
->>>>>>> origin/main
   [ "$(git -C "$w/sm" rev-parse HEAD)" = "$head" ] \
     || fail "default-only sweep did not still fast-forward the tracked files"
   pass "B10 bootstrap sweep materializes and inherits the startup-memory default while fast-forwarding"
-}
-
-# config/backend: present and absent primary state converges exactly.
-test_backend_inheritance_present_and_absent() {
-  local w head out err status instruction
-  w=$(new_world backend-inherit)
-  head=$(git -C "$w/main" rev-parse HEAD)
-  add_sm_worktree "$w" sm "$head"
-
-  printf 'tmux\n' > "$w/home/config/backend"
-  err="$w/backend-inherit.err"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
-  expect_code 0 "$status" "backend present push should succeed"
-  assert_contains "$out" "backend: pushed" "backend present value should report pushed"
-  [ "$(cat "$w/sm/config/backend")" = tmux ] || fail "backend present value not pushed"
-  instruction=$(reread_instruction_path "$w/sm") || fail "backend present reread instruction missing"
-  assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\ntmux\n-----END config/backend-----' \
-    "backend present reread must include exact bytes"
-
-  printf 'herdr\n' > "$w/sm/config/backend"
-  printf 'zellij\n' > "$w/home/config/backend"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
-  expect_code 0 "$status" "backend changed push should succeed"
-  assert_contains "$out" "backend: pushed" "backend changed value should report pushed"
-  [ "$(cat "$w/sm/config/backend")" = zellij ] \
-    || fail "primary backend did not overwrite the divergent destination"
-
-  rm -f "$w/home/config/backend"
-  out=$(run_config_push "$w" 2>"$err"); status=$?
-  expect_code 0 "$status" "backend absence push should succeed"
-  assert_contains "$out" "backend: pushed - mirrored primary absence" "backend should mirror primary absence"
-  [ -e "$w/sm/config/backend" ] && fail "backend not removed on primary absence"
-  instruction=$(reread_instruction_path "$w/sm") || fail "backend absence reread instruction missing"
-  assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\nABSENT\n-----END config/backend-----' \
-    "backend absence reread must use ABSENT token"
-  pass "B12b backend inheritance: present values and primary absence converge exactly"
 }
 
 # config/backend: present and absent primary state converges exactly.
@@ -2381,10 +2311,7 @@ SH
 test_harness_resolution
 test_secondmate_model_effort_tokens
 test_pi_signed_detection_and_session_lock_identity
-<<<<<<< HEAD
 test_dash_leading_process_names_are_basename_operands
-=======
->>>>>>> origin/main
 test_propagate_lib
 test_spawn_split_and_inherit
 test_spawn_backward_compat_crew_fallback
@@ -2404,11 +2331,7 @@ test_spawn_fallback_chain_and_crew_scout_unaffected
 test_bootstrap_sweep_propagates_and_reconverges
 test_bootstrap_sweep_propagates_when_tracked_current
 test_bootstrap_sweep_defers_dispatch_on_stale_unignored_home
-<<<<<<< HEAD
 test_bootstrap_sweep_materializes_and_inherits_memory_default
-=======
-test_bootstrap_sweep_no_inheritance_is_noop
->>>>>>> origin/main
 test_backend_inheritance_present_and_absent
 test_bootstrap_sweep_surfaces_config_propagation_failure
 test_bootstrap_rereads_after_partial_propagation

@@ -59,8 +59,6 @@ export const Type = {
 JS
 }
 
-<<<<<<< HEAD
-=======
 test_tracked_extension_present_and_self_hashing() {
   local text expected_config_source
   expected_config_source="config_dir=\\\"\${FM_CONFIG_OVERRIDE:-\$FM_HOME/config}\\\""
@@ -118,8 +116,6 @@ test_spawn_template_mentions_pi_watch_placeholder() {
   assert_contains "$text" "__PIWATCH__" "fm-spawn does not replace the Pi watch extension placeholder"
   pass "Pi secondmate launch wiring includes both tracked primary extensions"
 }
-
->>>>>>> origin/main
 test_pi_extension_reports_external_healthy_watcher() {
   local repo home plugin out status
   repo="$TMP_ROOT/pi-external-healthy-root"

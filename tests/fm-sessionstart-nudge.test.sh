@@ -148,8 +148,6 @@ EOF
   pass "OpenCode session.created delivers the exact wrapper nudge once per session"
 }
 
-<<<<<<< HEAD
-=======
 test_tracked_harness_registration() {
   local command pi_plugin omp_plugin opencode_plugin
   jq -e '.hooks.SessionStart | length == 1' "$ROOT/.claude/settings.json" >/dev/null \
@@ -193,8 +191,6 @@ test_tracked_harness_registration() {
 
   pass "all six verified harnesses register the shared session-start nudge"
 }
-
->>>>>>> origin/main
 test_genuine_primary_nudges
 test_gate_env_is_silent
 test_gate_common_dir_is_silent

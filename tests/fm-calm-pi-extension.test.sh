@@ -71,8 +71,6 @@ find_chrome() {
   return 1
 }
 
-<<<<<<< HEAD
-=======
 test_static_contract() {
   local text assistant_layout operational_user_layout visibility watch operational
   assert_present "$EXT" "tracked Pi calm extension is missing"
@@ -123,18 +121,15 @@ test_static_contract() {
   assert_contains "$operational" 'fm-operational-input.sh' "Pi adapter does not delegate to the canonical cross-language owner"
   assert_not_contains "$visibility" 'FIRSTMATE WATCHER WAKE:' "current Calm classification still matches watcher payload prose"
   assert_not_contains "$visibility" 'TURN WOULD END BLIND' "current Calm classification still matches turn-end payload prose"
-  # shellcheck disable=SC2016 # Backticks are literal prompt markup.
   assert_not_contains "$visibility" 'Run `bin/fm-session-start.sh`' "current Calm classification still matches session-start payload prose"
   assert_not_contains "$visibility" 'FIRSTMATE_OP: ' "current Calm classification duplicates the canonical marker grammar"
   assert_contains "$watch" 'calmHides("assistant-tool-call")' "Firstmate watcher tool does not participate in Calm presentation"
   assert_contains "$watch" 'renderShell: "self"' "Firstmate watcher tool cannot remove its complete shell"
   for name in Read Bash Edit Write Grep Find Ls; do
-    assert_contains "$text" "create${name}ToolDefinition" "Pi calm extension does not wrap the $name built-in"
+    assert_contains "$watch" "name: \"$name\"" "Firstmate watcher tool lost the built-in tool shell for $name"
   done
-  pass "Pi calm extension is presentation-only with one persisted visibility choice, no Calm status row, native working visibility, supported redraw controls, and the Firstmate watcher-tool integration"
 }
 
->>>>>>> origin/main
 test_home_resolution() {
   local fixture out status version
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -276,10 +271,7 @@ test_pi_compat_degraded_adapter() {
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
-<<<<<<< HEAD
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
-=======
->>>>>>> origin/main
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/project/node_modules/@earendil-works/pi-coding-agent"
   ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/project/node_modules/@earendil-works/pi-tui"
@@ -378,10 +370,7 @@ test_pi_compat_missing_adapter_exports() {
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
-<<<<<<< HEAD
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
-=======
->>>>>>> origin/main
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   printf '%s\n' '{"type":"module"}' >"$fixture/project/package.json"
   printf '%s\n' \
@@ -3343,6 +3332,7 @@ JS
   pass "Pi calm native E2E replaces the stock working row with a moving, resize-clamped working ship that freezes and resumes across two working periods in one Pi session, clears on abort, keeps captain turns visible, hides exact operational user rows without changing persistence, restores stock rendering Calm-off, survives restart, and preserves export plus Ctrl+O behavior"
 }
 
+test_static_contract
 test_home_resolution
 test_pi_compat_no_upper_bound
 test_pi_compat_degraded_adapter

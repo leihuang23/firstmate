@@ -70,11 +70,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-<<<<<<< HEAD
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi)
-=======
 #   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
->>>>>>> origin/main
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. pi-signed launches that exact executable name from PATH and
@@ -433,11 +429,7 @@ FIRSTMATE_HOME=
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-<<<<<<< HEAD
-    ''|claude|codex|opencode|pi|pi-signed|grok|kimi)
-=======
     ''|claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
->>>>>>> origin/main
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -488,155 +480,7 @@ launch_template() {
         printf '%s%s' "$harness" ' __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
         printf '%s%s' "$harness" ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-<<<<<<< HEAD
-=======
-      fi
-      ;;
-    # omp (Oh My Pi, binary `omp`, a pi-mono fork): a positional prompt starts
-    # the supervised interactive session (verified 2026-07-26 on 17.1.3).
-    # --auto-approve skips every tool-approval prompt, which an unattended
-    # crewmate needs. omp loads explicit -e extension paths without any trust
-    # gate (verified), so the turn-end extension rides the launch line exactly
-    # like pi's. omp has no permission-free default, so --auto-approve stays on
-    # both kinds.
-    omp)
-      if [ "$kind" = secondmate ]; then
-        printf '%s' 'omp --auto-approve __MODELFLAG____EFFORTFLAG__-e __OMPTURNEND__ -e __OMPWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
-      else
-        printf '%s' 'omp --auto-approve __MODELFLAG____EFFORTFLAG__-e __OMPEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
->>>>>>> origin/main
-      fi
-      ;;
-    # grok (Grok Build TUI): a positional prompt starts the supervised interactive
-    # session. --always-approve auto-approves every tool execution (verified: the
-    # crewmate runs fully autonomously, no permission gate), which an unattended
-    # crewmate needs; it is the targeted equivalent of claude's
-    # --dangerously-skip-permissions. grok's turn-end signal does NOT ride the
-    # launch command - it is a Stop-event hook installed below (global hook +
-    # per-task pointer), so the template is identical for ship/scout/secondmate.
-    grok) printf '%s' 'grok --always-approve __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
-    # Kimi Code rejects a positional prompt, so it launches bare and receives
-    # only an absolute brief pointer after the TUI readiness gate below.
-    # Its turn-end signal is a globally configured Stop hook plus a guarded
-    # per-task worktree token, so no launch placeholder belongs here.
-    kimi) printf '%s' '__KIMIBIN__ __MODELFLAG__--auto' ;;
-    *) return 1 ;;
-  esac
-}
-
-case "$ARG3" in
-  *' '*)  # raw launch command (unverified-adapter escape hatch)
-    LAUNCH=$ARG3
-    HARNESS=""
-    for word in $LAUNCH; do
-      case "$word" in [A-Za-z_]*=*) continue ;; *) HARNESS=$(basename "$word"); break ;; esac
-    done
-    ;;
-  '')
-    # No explicit harness: resolve from config. A secondmate AGENT launches on the
-    # secondmate harness (config/secondmate-harness -> config/crew-harness -> own);
-    # every other kind uses the crew harness only when no dispatch profile file is
-    # active. Resolving here on every spawn is what makes the split DURABLE - a
-    # respawn (recovery, /updatefirstmate, restart) re-resolves, so
-    # config/secondmate-harness keeps governing secondmate launches across restarts.
-    # The launch_template lookup below is the unverified-adapter guard for both
-    # kinds: a harness with no template aborts the spawn.
-    if [ "$KIND" = secondmate ]; then
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
-      harness_src='config/secondmate-harness (falling back to config/crew-harness)'
-    else
-      if [ -f "$CONFIG/crew-dispatch.json" ]; then
-        echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
-        exit 1
-      fi
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
-      harness_src='config/crew-harness'
-    fi
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2; exit 1; }
-    ;;
-  *)
-    HARNESS=$ARG3
-    LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: unknown harness '$HARNESS'; pass a raw launch command to use an unverified adapter" >&2; exit 1; }
-    ;;
-esac
-
-case "$HARNESS" in
-  pi|pi-signed) LAUNCH="FM_PI_HARNESS=$HARNESS $LAUNCH" ;;
-esac
-
-# pi-signed is an explicitly selected executable identity, not an alias that may
-# silently fall back to pi. Resolve it from PATH before creating an endpoint and
-# retain the literal name in the launch command and task metadata.
-if [ "$HARNESS" = pi-signed ] && ! command -v pi-signed >/dev/null 2>&1; then
-  echo "error: pi-signed executable not found on PATH; install the signed Pi wrapper or select a different verified harness" >&2
-  exit 1
-fi
-
-# config/secondmate-harness may carry optional model/effort tokens alongside the
-# harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
-# --secondmate spawn and no explicit per-spawn harness/raw launch was supplied, so
-# the harness itself came from the secondmate config fallback chain. Resolving
-# here on every spawn makes the pin durable across respawns. Precedence: explicit
-# --model/--effort flags still win over the file's tokens.
-if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
-  if [ "$MODEL_SET" -eq 0 ]; then
-    SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
-    [ -z "$SM_MODEL" ] || MODEL=$SM_MODEL
-  fi
-  if [ "$EFFORT_SET" -eq 0 ]; then
-    SM_EFFORT=$("$SCRIPT_DIR/fm-harness.sh" secondmate-effort)
-    if [ -n "$SM_EFFORT" ]; then
-      case "$SM_EFFORT" in
-        low|medium|high|xhigh|max) EFFORT=$SM_EFFORT ;;
-        *) echo "warning: config/secondmate-harness effort token '$SM_EFFORT' is not one of low, medium, high, xhigh, max; ignoring" >&2 ;;
-      esac
-    fi
-  fi
-fi
-
-secondmate_registry_value() {
-  secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
-}
-
-shell_quote() {
-  printf "'"
-  printf '%s' "$1" | sed "s/'/'\\\\''/g"
-  printf "'"
-}
-
-resolve_kimi_binary() {
-  local candidate dir fallback
-  candidate=$(command -v kimi 2>/dev/null || true)
-  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-    case "$candidate" in
-      /*) printf '%s\n' "$candidate"; return 0 ;;
-      *)
-        dir=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P) || dir=
-        if [ -n "$dir" ]; then
-          printf '%s/%s\n' "$dir" "$(basename "$candidate")"
-          return 0
-        fi
-        ;;
-    esac
-  fi
-  fallback="${HOME:-}/.kimi-code/bin/kimi"
-  if [ -n "${HOME:-}" ] && [ -x "$fallback" ]; then
-    printf '%s\n' "$fallback"
-    return 0
-  fi
-  echo "error: kimi executable not found; searched PATH for 'kimi' and fallback '$fallback'" >&2
-  return 1
-}
-
-model_flag_for_harness() {
-  local harness=$1 model=$2
-  [ -n "$model" ] && [ "$model" != default ] || return 0
-  case "$harness" in
-<<<<<<< HEAD
-    claude|codex|opencode|pi|pi-signed|grok|kimi)
-=======
     claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
->>>>>>> origin/main
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac

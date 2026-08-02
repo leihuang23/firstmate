@@ -1276,13 +1276,9 @@ test_herdr_teardown_clears_escalation_marker() {
     'herdr_workspace_id=wG' \
     'herdr_tab_id=wG:tQ' \
     'herdr_pane_id=wG:pQ' >> "$case_dir/state/task-x1.meta"
-<<<<<<< HEAD
   # A reachable session whose exact pane is already structurally gone: the
   # locked close is a no-op and the record gate sees a confirmed-gone pane.
   cat > "$case_dir/fakebin/herdr" <<SH
-=======
-  cat > "$case_dir/fakebin/herdr" <<'SH'
->>>>>>> origin/main
 #!/usr/bin/env bash
 case "\${1:-} \${2:-}" in
   "session list") printf '%s\n' '{"sessions":[{"name":"default","running":true,"socket_path":"$case_dir/herdr.sock"}]}' ;;
