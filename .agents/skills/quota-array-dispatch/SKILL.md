@@ -2,7 +2,11 @@
 name: quota-array-dispatch
 description: >-
   Agent-only decision procedure for resolving a matched crew-dispatch profile
+<<<<<<< HEAD
   array from current quota-axi output, including effective headroom and usable-runway evidence.
+=======
+  array from current quota-axi output, including quota-window pace signals.
+>>>>>>> origin/main
   Load when a dispatch rule or default resolves to more than one profile candidate.
 user-invocable: false
 metadata:
@@ -11,16 +15,25 @@ metadata:
 
 # quota-array-dispatch
 
+<<<<<<< HEAD
 This skill is the single owner of the completion-aware profile-array selection procedure.
 `AGENTS.md` section 4 owns the always-loaded intake boundary, load trigger, malformed-config refusal, every-candidate accounting, and strongest-reasoning/tie safety rules.
 `harness-adapters` owns harness verification, model/provider discovery, and effort fallback.
 `quota-axi` remains data-only, reports whatever granularity the vendor supplies, and never recommends, selects, ranks, or infers a route.
 Do not add a daemon, opaque composite score, routing wrapper, hard-coded model-specific policy, or producer-side route recommendation.
 Deterministic shell owns only schema, configuration, and version validation plus concrete spawn safeguards; every model-to-provider, provider-to-credential, and quota-applicability relation is yours to establish transparently and to show your evidence for.
+=======
+This skill is the single owner of the pace-aware profile-array selection procedure.
+`AGENTS.md` section 4 owns the always-loaded intake boundary, load trigger, malformed-config refusal, every-candidate accounting, and strongest-reasoning/tie safety rules.
+`harness-adapters` owns harness verification, model/provider discovery, and effort fallback.
+`quota-axi` remains data-only and never recommends a route.
+Do not add a daemon, opaque composite score, routing wrapper, hard-coded model-specific policy, or producer-side route recommendation.
+>>>>>>> origin/main
 
 ## Collect facts
 
 Run `quota-axi --json` once per intake and reuse that snapshot for every candidate.
+<<<<<<< HEAD
 Do not take a second snapshot to settle a candidate, and read `quota-axi auth --json` when a candidate's credential surface is in question.
 For each candidate, preserve explicit `harness`, `model`, and `provider`; `harness-adapters` owns identity, and model/provider never infer harness:
 
@@ -69,6 +82,18 @@ When a credential's local classification is the only thing standing between a ca
 `bin/fm-vendor-auth-probe.sh` is the only approved vendor-credential probe; its `--help` owns the registered probes and mechanics.
 It takes no harness, model, or provider and returns a fact, not a route: only `authenticated` and `unauthenticated` are ground truth, while `indeterminate`, `timeout`, and `unavailable` establish nothing and must never be read as either outcome.
 Never launch a vendor CLI yourself, and never probe a credential store the candidate does not use.
+=======
+For each candidate, preserve explicit `harness`, `model`, and `provider`; `harness-adapters` owns identity, and model/provider never infer harness:
+
+- task/profile fit and required reasoning class
+- raw applicable headroom (`effectivePercentRemaining` or tightest applicable percentage)
+- effective pace, signed reserve per window, and worst reserve (`worstReservePercentPoints` or minimum signed reserve)
+- whether applicable windows/summary are ahead, or pace is `unknown`
+- schema note when pace fields are absent
+
+Stale raw windows are diagnostic, never headroom.
+Read all windows named by `boundedBy`, `limitingWindowIds`, `aheadWindowIds`, `behindWindowIds`, `onPaceWindowIds`, and `unknownWindowIds`.
+>>>>>>> origin/main
 
 ## Pace semantics
 
@@ -82,6 +107,7 @@ Conservation pressure is present for effective pace status `ahead`, effective pa
 ## Selection order
 
 Apply only among candidates satisfying required fit and strongest reasoning class.
+<<<<<<< HEAD
 Never use headroom, runway, pace, or reserve to silently replace that reasoning class.
 
 1. Concrete contradictory evidence or malformed configuration: stop and report the tuple and that evidence.
@@ -109,5 +135,25 @@ Never use headroom, runway, pace, or reserve to silently replace that reasoning 
    Report duplicate concrete profiles as a configuration error.
 
 Account for every candidate visibly before selecting or escalating, naming its catalog evidence, provider relation, applicable quota and authentication facts, remaining uncertainty, fit and reasoning class, effective headroom, usable runway, likely-completion reasoning, and later pace or reserve evidence when used.
+=======
+Never use pace or raw headroom to silently replace that reasoning class.
+
+1. Unresolved relationship or quota: stop and report the tuple and concrete evidence.
+2. All-tight: keep strongest reasoning; dispatch inside it or report if blocked.
+3. Comparable fit/reasoning: prefer no ahead pressure over pressure, even with higher raw headroom.
+4. Among pressured candidates, prefer the least-negative worst applicable reserve.
+5. Sustainable candidates: use known pace plus raw headroom.
+   Prefer known sustainable evidence over `unknown` when comparable.
+   Do not collapse those facts into an opaque composite score.
+6. If unresolved pace changes the choice, report uncertainty.
+7. Absent pace or older schema: do not crash, fabricate pace, or treat absence as healthy/`on_pace`.
+   Compare raw headroom only, state pace is unavailable, and keep safety rules.
+8. Genuine ties: stop and report every tied candidate for captain choice.
+   Do not select by array order, harness name, or another arbitrary identity ordering.
+   Report duplicate concrete profiles as a configuration error.
+
+Name the inspectable facts used for every candidate.
+After selecting, check auth only through that tuple's surface; another harness CLI cannot block it.
+>>>>>>> origin/main
 A blocked credential report must name `harness`, `model`, authentication surface, and concrete failure evidence; never emit a bare `Grok unauthenticated` statement.
 Never conclude with an unexplained "best quota" label.

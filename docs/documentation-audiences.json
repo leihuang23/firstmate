@@ -292,6 +292,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": "docs/supervision-protocols/omp.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": "docs/supervision-protocols/pi.md",
       "audience": "agent-runtime"
     },
