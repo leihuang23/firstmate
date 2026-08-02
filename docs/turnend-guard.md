@@ -63,12 +63,19 @@ Any allow resets the budget.
 OpenCode, Pi, pi-signed, and Grok expose passive callbacks for this purpose.
 Their adapters fail open at the hook boundary to protect the user session but schedule one bounded follow-up when the predicate blocks.
 The generated prompts use the canonical `turn-end-guard` kind after the U+2063 `FIRSTMATE_OP: ` prefix, so Ahoy does not treat them as captain messages.
-Each adapter owns a loop latch.
+Each passive adapter owns a loop latch.
 Pi keeps the latch across internal tool turns and clears it only when the generated follow-up settles or delivery fails.
-Grok's project hook requires the checkout to be trusted with `/hooks-trust` or launch-time `--trust`.
 OpenCode's forced follow-up is supported for persistent TUI sessions and remains fail-open in headless `opencode run`.
 
-If a passive adapter cannot invoke its SDK, find `grok`, or recover a Grok session id, the next pull-based `fm-guard.sh` call reports the problem.
+Grok makes exactly one typed capability decision from each running Stop payload.
+A boolean `stopHookActive` selects native blocking, including both false on the initial stop and true on the bounded continuation.
+The camel-case field has precedence when both spellings appear; when it is absent, a boolean `stop_hook_active` selects the same native path for compatibility.
+The native path returns the shared guard's status and stderr to the same Grok process and never starts `grok --resume`.
+When both capability spellings are absent, the adapter preserves one pre-native `grok --resume` fallback guarded by `GROK_TURNEND_GUARD_ACTIVE` and intentionally omits `--permission-mode`.
+Malformed JSON, a selected field with a non-boolean type, missing `jq`, missing hook prerequisites, or an already-active legacy guard allows the stop without starting either continuation path.
+Grok's project hook requires the checkout to be trusted with `/hooks-trust` or launch-time `--trust`; genuine pre-native builds can run the same tracked hook from an isolated global hook directory.
+
+If a passive adapter cannot invoke its SDK, or the Grok legacy fallback cannot find `grok` or a session id, the next pull-based `fm-guard.sh` call reports the problem.
 That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it always points to the active harness protocol rather than embedding another repair command.
 
 ## Compatibility limits

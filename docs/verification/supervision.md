@@ -48,6 +48,7 @@ The earlier `sendUserMessage` counterfactual raced the positional prompt; the cu
 The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
 [`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
 
+
 Omp 17.1.3 ran on 2026-07-26 with the tracked `.omp/extensions/fm-primary-turnend-guard.ts` auto-discovered from the checkout (no trust gate).
 Command shape:
 
@@ -56,6 +57,7 @@ omp -p --no-session 'Call the fm_watch_arm_omp tool now, then reply with exactly
 ```
 
 Observed result: the injected `pi.sendMessage` nudge reached the model and was obeyed (it ran session start, which correctly resolved read-only against the live lock holder), and the same session's watcher tool returned the read-only refusal.
+
 
 Current deterministic and live entry points:
 
@@ -82,10 +84,30 @@ The direct and passive mechanisms were validated across all six harnesses on 202
 | OpenCode | 1.17.6 | Passive `session.idle` callback | Throwing could not block, while `promptAsync` scheduled one TUI follow-up; headless remained fail-open. |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
 | Omp | 17.1.3 | Blocking `session_stop` extension event | `{ continue: true, additionalContext }` forced one continuation in print mode; with fake in-flight work and no watcher the continuation ran session start (acquiring the lock through the omp bun-ancestry detection) and armed the watcher through `fm_watch_arm_omp`. The extension latch allowed the continuation's own stop exactly once, and omp caps consecutive continuations at 8. |
-| Grok | 0.2.93 | Passive `Stop` plus bounded resume | Project hook ran under trust, resumed once without inherited bypass permissions, and the environment latch prevented recursion. |
+| Grok | 0.2.112 native and 0.2.73 pre-native | Running-payload adaptive `Stop` | Native false-to-true continuation stayed in one process with two model turns and zero resume launches; the field-absent pre-native process launched exactly one guarded resume. |
+
+The Grok adaptive matrix ran on 2026-07-28 with separate scratch repositories and homes, dedicated tmux sockets, one target plus one control window, ambient tmux variables removed, and a socket-bound wrapper first in `PATH`.
+
+```sh
+FM_GROK_STOP_LIVE_E2E=1 \
+  FM_GROK_NATIVE_BIN="$native_grok_0_2_112" \
+  FM_GROK_LEGACY_BIN="$official_pre_native_grok_0_2_73" \
+  tests/fm-grok-stop-live-e2e.test.sh
+```
+
+Observed bounded output:
+
+```text
+ok - grok 0.2.112 (9bbd559437aa) [stable] native Stop kept one session across false->true, two model turns, and zero resume processes
+ok - grok 0.2.73 (9ff14c43bbe5) [stable] legacy Stop omitted capability, resumed exactly once, and stopped normally
+ok - Grok adaptive Stop real-process matrix passed with exact target cleanup and control-window survival
+```
+
+The same run proved the Claude-compatible Stop entries stay inert under `GROK_AGENT`, the legacy resume carries `GROK_TURNEND_GUARD_ACTIVE=1`, and every replacement root is removed after exact target cleanup while its control window survives.
 
 The secondmate-home scope and manual-repair wake path were measured with Claude Code 2.1.207 on 2026-07-12, when a native background completion re-invoked the idle model with no human input.
 The current Stop-owned main/secondmate inclusion and child-worktree exclusion are covered deterministically by `tests/fm-claude-stop-autoarm.test.sh`.
+On 2026-07-28 with Claude Code 2.1.205, `fm_harness_ancestry_pid()` in `bin/fm-session-lock-lib.sh` was fixed to resolve the outermost pid of a contiguous nested-harness run instead of the first match, so the Stop auto-arm correctly reaches the session's true lock owner through Claude Code's multi-level `bg-spare` hook worker chain.
 
 The Claude product live path ran with Claude Code 2.1.219 on 2026-07-24:
 
@@ -108,6 +130,7 @@ tests/fm-turnend-guard.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-omp-watch-extension.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
+FM_GROK_STOP_LIVE_E2E=1 FM_GROK_NATIVE_BIN="$native_grok" FM_GROK_LEGACY_BIN="$pre_native_grok" tests/fm-grok-stop-live-e2e.test.sh
 ```
 
 ## Watcher continuity
