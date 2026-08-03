@@ -34,6 +34,13 @@ FM_TEST_LIB_SOURCED=1
 # strips this to verify real refusal.
 export FM_GATE_REFUSE_BYPASS=1
 
+# Start every suite free of harness-detection env markers. fm-harness.sh's
+# layer-1 env markers describe the AGENT RUNNING the test shell, not the harness
+# a test wants to simulate, and omp sets both OMPCODE=1 and CLAUDECODE=1 for its
+# children, so a suite run from an omp session would otherwise misdetect every
+# CLAUDECODE=1-pinned simulation. Tests that need a marker set it explicitly.
+unset OMPCODE CLAUDECODE PI_CODING_AGENT GROK_AGENT
+
 # Resolve the repo root from this library's own location. Consumed by sourcing
 # test files, not by this library, so it reads as "unused" here.
 # shellcheck disable=SC2034

@@ -412,10 +412,10 @@ SH
 # Drop every harness env marker from bin/fm-harness.sh detect_own so the
 # surrounding interactive shell cannot leak past the suite's fake ps harness.
 # Markers today: CLAUDECODE (claude), PI_CODING_AGENT plus FM_PI_HARNESS
-# (Pi family), GROK_AGENT (grok).
+# (Pi family), GROK_AGENT (grok), and OMPCODE (omp).
 # codex and opencode have no env markers (ancestry only). Without this, a local
-# claude/pi/grok session fails cases that pin a different fake harness while CI
-# (no ambient markers) still passes.
+# claude/pi/grok/omp session fails cases that pin a different fake harness while
+# CI (no ambient markers) still passes.
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
   if [ -n "$pi_harness" ]; then
@@ -729,7 +729,7 @@ SH
   i=1
   while [ "$i" -le 40 ]; do
     (
-      harness_pid=$BASHPID
+      harness_pid=$(/bin/sh -c 'printf "%s\n" "$PPID"')
       : > "$home/state/harness-$harness_pid"
       : > "$ready/$i"
       while [ "$(find "$ready" -type f | wc -l | tr -d ' ')" -lt 40 ]; do
@@ -897,6 +897,26 @@ EOF
   [ "$orphan_count" -eq 1 ] || fail "orphan status log was printed $orphan_count times: $out"
 
   pass "orphan status logs are printed once with bounded tails"
+}
+
+test_omp_delivery_failure_marker_is_surfaced() {
+  local rec root home fakebin out marker
+  rec=$(new_world omp-delivery-failure)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" omp
+  marker="$home/state/.omp-watch-delivery-failed"
+  printf 'watcher: FAILED - omp wake delivery rejected: synthetic\n' > "$marker"
+
+  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  assert_contains "$out" "Omp watcher delivery failure" "session-start digest omitted the Omp delivery-failure section"
+  assert_contains "$out" "watcher: FAILED - omp wake delivery rejected: synthetic" "session-start digest omitted the Omp delivery failure"
+  assert_contains "$out" "$marker" "session-start digest omitted the full delivery-failure marker path"
+  assert_not_contains "$out" "--- omp-watch-delivery ---" "delivery failure leaked into the watched orphan-status namespace"
+  pass "session start surfaces Omp delivery failures outside watcher signals"
 }
 
 # --- session-start secondmate recovery boundary -----------------------------
@@ -1391,6 +1411,62 @@ EOF
   pass "session start rejects Pi loaded markers from previous sessions"
 }
 
+test_supervision_block_omp_diagnostic() {
+  local rec root home fakebin out block_count
+  rec=$(new_world omp-supervision-block)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_harness "$fakebin" omp
+
+  out=$(FM_FAKE_HARNESS=omp run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  block_count=$(printf '%s\n' "$out" | grep -c '^SUPERVISION OPERATING INSTRUCTIONS - primary harness:')
+  [ "$block_count" -eq 1 ] || fail "expected exactly one supervision block, got $block_count"
+  assert_contains "$out" "SUPERVISION OPERATING INSTRUCTIONS - primary harness: omp" "omp supervision block missing"
+  assert_contains "$out" "Mode: omp extension background wake." "omp snippet missing from session start"
+  assert_contains "$out" "OMP_WATCH_EXTENSION: not loaded" "omp extension load diagnostic missing"
+  assert_contains "$out" "restart plain omp so $root/.omp/extensions/fm-primary-turnend-guard.ts and $root/.omp/extensions/fm-primary-omp-watch.ts auto-load" "omp extension load diagnostic omits an extension path"
+  pass "session start emits the omp supervision block and reports omp extension load state"
+}
+
+test_extension_diagnostic_suppressed_when_read_only() {
+  local rec root home fakebin out holder_pid
+  rec=$(new_world omp-read-only-suppression)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  # Every pid reports as the omp harness: detect_own resolves omp, fm-lock finds
+  # the shell's own ancestry harness pid, and the pre-written lock (a real live
+  # sleep pid) reads as a DIFFERENT live harness, forcing the read-only path.
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "$*" in
+  *"comm="*) printf '/usr/local/bin/omp\n'; exit 0 ;;
+  *"args="*) printf 'omp\n'; exit 0 ;;
+  *"ppid="*) printf '1\n'; exit 0 ;;
+esac
+exit 1
+SH
+  chmod +x "$fakebin/ps"
+  sleep 60 &
+  holder_pid=$!
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+
+  assert_contains "$out" "READ-ONLY SESSION" "session did not report the read-only path"
+  assert_contains "$out" "primary harness: omp" "omp supervision block missing in read-only mode"
+  assert_not_contains "$out" "OMP_WATCH_EXTENSION" "omp extension diagnostic fired in a read-only session"
+  assert_not_contains "$out" "PI_WATCH_EXTENSION" "pi extension diagnostic fired in a read-only session"
+  pass "session start suppresses extension load diagnostics when read-only"
+}
+
 test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
@@ -1404,6 +1480,7 @@ test_session_start_preserves_proven_bare_shell_recovery
 test_session_start_relaunches_herdr_husk_secondmate
 test_status_tail_bounding
 test_orphan_status_logs_are_printed
+test_omp_delivery_failure_marker_is_surfaced
 test_endpoint_liveness_tmux
 test_endpoint_liveness_herdr
 test_composition_invokes_real_scripts
@@ -1414,6 +1491,8 @@ test_fleet_digest_empty_fleet
 test_next_step_sources_x_mode_cadence
 test_next_step_afk_delegates_to_daemon
 test_supervision_block_exactly_one_and_pi_diagnostic
+test_supervision_block_omp_diagnostic
+test_extension_diagnostic_suppressed_when_read_only
 test_pi_signed_primary_uses_pi_extensions_without_identity_normalization
 test_pi_diagnostic_rejects_stale_loaded_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker
