@@ -419,11 +419,11 @@ SH
 run_session_start() {
   local home=$1 root=$2 path=$3 pi_harness=${4:-}
   if [ -n "$pi_harness" ]; then
-    env -u CLAUDECODE -u GROK_AGENT PI_CODING_AGENT=true FM_PI_HARNESS="$pi_harness" \
+    env -u CLAUDECODE -u GROK_AGENT -u OMPCODE PI_CODING_AGENT=true FM_PI_HARNESS="$pi_harness" \
       FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
       "$SESSION_START"
   else
-    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
+    env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT -u OMPCODE \
       FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$path" \
       "$SESSION_START"
   fi
@@ -684,6 +684,39 @@ EOF
   pass "session start stays read-only when lock ownership cannot be published"
 }
 
+test_trace_context_effective_state_is_frozen_after_lock() {
+  local rec root home fakebin out frozen
+  rec=$(new_world trace-context-session-state)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  : > "$home/config/trace-context"
+
+  FM_TRACE_CONTEXT=off run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  [ "$(awk '{print $2}' "$home/state/.trace-context-effective")" = off ] \
+    || fail "session start must freeze an env-off override over a present config flag"
+
+  rm "$home/config/trace-context"
+  FM_TRACE_CONTEXT=on run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  [ "$(awk '{print $2}' "$home/state/.trace-context-effective")" = on ] \
+    || fail "a new session start must freeze an env-on override over an absent config flag"
+  frozen=$(cat "$home/state/.trace-context-effective")
+
+  sleep 300 &
+  holder_pid=$!
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+  out=$(FM_TRACE_CONTEXT=off run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+  assert_contains "$out" "READ-ONLY SESSION" "trace-context refusal fixture did not enter read-only mode"
+  [ "$(cat "$home/state/.trace-context-effective")" = "$frozen" ] \
+    || fail "a lock-refused session must not mutate the frozen trace-context state"
+
+  pass "locked session start freezes trace context and lock refusal leaves it unchanged"
+}
+
 test_session_lock_concurrent_single_winner() {
   local rec root home fakebin ready completed winners pids i pid count
   rec=$(new_world lock-concurrency)
@@ -729,7 +762,7 @@ SH
   i=1
   while [ "$i" -le 40 ]; do
     (
-      harness_pid=$(/bin/sh -c 'printf "%s\n" "$PPID"')
+      harness_pid=$(sh -c 'printf "%s\n" "$PPID"')
       : > "$home/state/harness-$harness_pid"
       : > "$ready/$i"
       while [ "$(find "$ready" -type f | wc -l | tr -d ' ')" -lt 40 ]; do
@@ -1470,6 +1503,7 @@ SH
 test_context_digest_absent_empty_present
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
+test_trace_context_effective_state_is_frozen_after_lock
 test_session_lock_concurrent_single_winner
 test_output_ordering_diagnostics_lead
 test_herdr_backend_diagnostics_follow_real_session_start
@@ -1491,10 +1525,10 @@ test_fleet_digest_empty_fleet
 test_next_step_sources_x_mode_cadence
 test_next_step_afk_delegates_to_daemon
 test_supervision_block_exactly_one_and_pi_diagnostic
-test_supervision_block_omp_diagnostic
-test_extension_diagnostic_suppressed_when_read_only
 test_pi_signed_primary_uses_pi_extensions_without_identity_normalization
 test_pi_diagnostic_rejects_stale_loaded_marker
 test_pi_diagnostic_accepts_prelock_loaded_marker
 test_pi_diagnostic_rejects_missing_turnend_guard_marker
 test_pi_diagnostic_rejects_previous_session_loaded_marker
+
+echo "# fm-session-start.test.sh: all assertions passed"

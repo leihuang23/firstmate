@@ -81,7 +81,26 @@ It does not permit `cd /home/project`, because an absolute-path `cd` remains a p
 - Grok sends stdin JSON at `.toolInput.command`.
 - OpenCode sends the exact command string through `--command <exact string>`.
 - Pi and pi-signed send the exact command string through `--command <exact string>`.
-- Omp returns `{block: true, reason}` only when the checker exits 2.
+- Omp sends the exact command string through `--command <exact string>` and returns `{block: true, reason}` only when the checker exits 2.
+
+Processing order is cheapest-first: a strict-superset prefilter, then the primary-checkout scope, then the Node policy owner.
+The prefilter removes ordinary single quotes, double quotes, backslashes, carriage returns, and newlines before fast-allowing any command that carries no `cd`, `pushd`, or `popd` substring and no quoting-decoder marker (`$'` ANSI-C or `$"` locale), so quoted or escaped command-word fragments delegate to the policy while most commands never pay for the git scoping calls or the Node process.
+The quoting-decoder marker set is coupled to the classifier's decoder set in `bin/fm-arm-command-policy.mjs`: adding any new quote or expansion form the classifier decodes requires extending the prefilter marker set in the same change, or it stops being a strict superset.
+
+Empty stdin, unparseable JSON, missing `jq` on the stdin path, missing Node, a missing policy owner, or an invalid policy response all fail open with exit 0 and no output.
+A broken hook must never deny every shell tool call.
+
+## Output contract
+
+Identical in shape to `docs/arm-pretool-check.md`:
+
+- Allow (and inert-outside-primary) returns exit 0 with both streams empty.
+- Deny returns exit 2 and writes `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[persistent-cd] reason"}` to stderr.
+- Default deny mode also writes `{"decision":"deny","reason":"[persistent-cd] reason"}` to stdout for Grok.
+- `--claude` suppresses stdout completely because Claude ignores a PreToolUse deny when stdout is nonempty.
+- Codex blocks on exit 2 and displays stderr.
+- OpenCode throws only when the checker exits 2.
+- Pi and pi-signed return `{block: true}` only when the checker exits 2.
 
 ## Shared classifier ownership
 

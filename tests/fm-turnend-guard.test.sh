@@ -1032,22 +1032,6 @@ run_hook_claude() {
   printf '{"stop_hook_active":%s,"session_id":"sess-claude-mode"}' "$stop_active" | CLAUDECODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --claude 2>&1
 }
 
-run_hook_omp() {
-  local dir=$1 home
-  home=$(cd "$dir" && pwd)
-  printf '{"stop_hook_active":false,"session_id":"sess-omp-mode"}' | OMPCODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --omp 2>&1
-}
-
-test_hook_omp_mode_reblocks_x_mode_without_tasks() {
-  local dir out status
-  dir=$(make_primary_dir "$TMP_ROOT/hook-omp-x-mode")
-  : > "$dir/state/x-watch.check.sh"
-  out=$(run_hook_omp "$dir"); status=$?
-  expect_code 2 "$status" "--omp mode must block an X-mode-only stop"
-  assert_contains "$out" "X-mode relay polling needs supervision" "--omp X-mode block must name the active supervision need"
-  pass "fm-turnend-guard --omp: X-mode-only homes block without a live watcher"
-}
-
 seed_claude_failure() {
   local dir=$1 outcome=${2:-failed-suppressed}
   : > "$dir/state/.claude-autoarm-failure-notified"
@@ -1098,6 +1082,22 @@ printf 'watcher: FAILED - persistent fixture failure\n'
 exit 1
 SH
   chmod +x "$dir/bin/fm-watch-arm.sh"
+}
+
+run_hook_omp() {
+  local dir=$1 home
+  home=$(cd "$dir" && pwd)
+  printf '{"stop_hook_active":false,"session_id":"sess-omp-mode"}' | OMPCODE=1 FM_HOME="$home" bash "$dir/bin/fm-turnend-guard.sh" --omp 2>&1
+}
+
+test_hook_omp_mode_reblocks_x_mode_without_tasks() {
+  local dir out status
+  dir=$(make_primary_dir "$TMP_ROOT/hook-omp-x-mode")
+  : > "$dir/state/x-watch.check.sh"
+  out=$(run_hook_omp "$dir"); status=$?
+  expect_code 2 "$status" "--omp mode must block an X-mode-only stop"
+  assert_contains "$out" "X-mode relay polling needs supervision" "--omp X-mode block must name the active supervision need"
+  pass "fm-turnend-guard --omp: X-mode-only homes block without a live watcher"
 }
 
 # The 2026-07-21 incident regression: after a spent forced continuation the old
@@ -1551,8 +1551,26 @@ test_hook_claude_mode_secondmate_reblocks_like_primary() {
   pass "fm-turnend-guard --claude: secondmate home re-blocks unclaimed and allows auto-arm-claimed stops"
 }
 
-test_settings_hook_uses_claude_project_dir
-test_codex_hook_invokes_shared_guard
+test_omp_extension_blocks_stop_with_continuation() {
+  local ext content
+  ext="$ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
+  [ -f "$ext" ] || fail "tracked omp primary extension is missing"
+  content=$(cat "$ext")
+  assert_contains "$content" 'session_stop' "omp extension must hook omp's blockable session_stop"
+  assert_contains "$content" 'fm-turnend-guard.sh' "omp extension must invoke the shared guard"
+  assert_contains "$content" 'continue: true' "omp extension must force a continuation when the guard blocks"
+  assert_contains "$content" 'additionalContext' "omp extension must feed the block reason back to the model"
+  assert_contains "$content" 'guardContinueActive' "omp extension must carry a one-continuation loop guard"
+  assert_contains "$content" 'TURN WOULD END BLIND' "omp extension must keep the blind-turn reason"
+  assert_contains "$content" 'session-start operating block' "omp extension must use harness-neutral repair wording"
+  assert_contains "$content" '.omp-turnend-extension-loaded' "omp extension must write its loaded marker for session-start diagnostics"
+  assert_contains "$content" 'lockOwnership' "omp extension loaded marker must respect the session lock"
+  assert_contains "$content" 'return { block: true, reason:' "omp extension changed the checker exit-2 block result"
+  assert_not_contains "$content" 'Run bin/fm-watch-arm.sh as a background task' "omp extension must not hardcode the old watcher-arm instruction"
+  pass ".omp primary extension: session_stop forces one continuation through the shared guard"
+}
+
+
 test_predicate_healthy_no_inflight
 test_predicate_unhealthy_no_beacon
 test_predicate_unhealthy_stale_beacon
@@ -1593,15 +1611,12 @@ test_grok_adapter_native_true_allows_without_resume
 test_grok_adapter_snake_case_native_and_camel_precedence
 test_grok_adapter_invalid_inputs_start_neither_path
 test_grok_adapter_missing_jq_and_no_supervision_allow
-test_settings_hook_uses_claude_project_dir
-test_codex_hook_invokes_shared_guard
 test_codex_hook_uses_process_pwd_when_payload_cwd_is_outside_root
 test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
 test_omp_extension_blocks_stop_with_continuation
-test_grok_hook_invokes_adapter
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
 test_hook_omp_mode_reblocks_x_mode_without_tasks

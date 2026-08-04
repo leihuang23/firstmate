@@ -15,8 +15,7 @@ Do not infer this guard's scope, loop safety, or compatibility tradeoffs for tho
 The turn-end guard closes the remaining gap at the primary's own turn boundary.
 When work, a process-event source, or X-mode relay polling needs supervision and no identity-matched watcher has a fresh beacon, the harness integration must either block the turn end or force one bounded follow-up that uses the recovery instruction from the emitted session-start protocol.
 Both guards require the same live lock, process identity, home/path binding, and fresh-beacon predicate.
-The guard remains a backstop, with Omp also using one bounded post-wake re-arm path.
-[`watcher-continuity.md`](watcher-continuity.md) owns the normal continuity contracts.
+The guard remains a backstop, with Omp also using one bounded post-wake re-arm path; [`watcher-continuity.md`](watcher-continuity.md) owns normal continuity.
 
 ## Shared predicate
 
@@ -49,8 +48,8 @@ If `jq` is missing or hook stdin is empty, the guard exits 0 because it cannot s
 - Omp listens for the blockable `session_stop` event in `.omp/extensions/fm-primary-turnend-guard.ts`, runs the shared guard once per stop attempt, and returns `{ continue: true, additionalContext }` once when the guard exits 2.
   The same extension file carries the session-start nudge and the watcher-arm, persistent-cd, and delegation PreToolUse guards, and `.omp/extensions/` auto-loads with no trust gate.
   Its shared guard invocation uses Omp mode so either in-flight tasks or an X-mode relay poll count as supervision need.
-- Grok registers a `Stop` hook in `.grok/hooks/fm-primary-turnend-guard.json` and uses `bin/fm-turnend-guard-grok.sh` to resume the reported session once when the shared guard returns 2.
-  The adapter intentionally omits `--permission-mode`, so a passive hook cannot grant stronger permissions than the resumed session default.
+- Grok registers a `Stop` hook in `.grok/hooks/fm-primary-turnend-guard.json` and delegates capability selection to `bin/fm-turnend-guard-grok.sh`.
+  The tracked Claude Stop entries are inert when `GROK_AGENT` is present, so Grok's Claude-compatible settings loading cannot create a second continuation path.
 
 Claude and Codex can block a Stop directly with exit status 2 and stderr.
 Both payloads carry `stop_hook_active`.

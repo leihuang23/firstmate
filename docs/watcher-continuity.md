@@ -37,7 +37,7 @@ This is deliberate Option B ordering: the fleet is protected before the model ha
 Claude's Stop hook starts the successor arm at the next Stop after the handling turn, rather than before notification as Pi and OpenCode do.
 The durable wake queue preserves actionable events during the residual active-turn window, and the bounded turn-end guard enforces recovery at Stop when no watcher or auto-arm claim is present.
 Omp has the same residual active-turn window, while its successor-first close handling and `session_stop` continuation close the gap before the handling turn can end.
-Claude, Pi, OpenCode, and Omp no longer depend on model re-arm after ordinary wakes.
+The model no longer re-arms after ordinary wakes.
 No PreToolUse hook denies fleet commands based on watcher status.
 A genuine auto-arm failure describes the automatic mechanism as broken and never directs a routine manual background arm.
 Terminal arm-output classification (`started`, `attached`, or `FAILED`) remains defense in depth for the manual recovery path.
@@ -52,8 +52,11 @@ For Omp, successor-first close handling is the normal re-arm path and the direct
 
 `bin/fm-watch-arm.sh` never returns a clean empty success.
 An actionable child output returns that reason normally.
-A zero/empty child return rechecks the home lock and beacon, attaches to a verified healthy successor when one exists, or emits `watcher: FAILED - cycle ended without an actionable reason` and exits nonzero.
-An attached arm follows verified identity-matched successors and reports the same typed failure if that chain ends without one.
+A zero/empty child return rechecks the home lock and beacon, attaches to a verified healthy successor when one exists, or resolves the close against the watcher's bounded terminal-delivery ledger.
+An attached arm follows verified identity-matched successors and resolves the same way when that chain ends without one, because it holds no handle on the watcher's stdout and cannot read the reason line itself.
+Before releasing its singleton lock after printing an actionable reason, the watcher records that reason with its PID and process identity in `state/.watch-deliveries.log`.
+A matching PID and identity lets an attached arm report the delivered reason and exit zero even after the durable wake queue was drained, while an unrelated queue producer or a recycled PID cannot satisfy the match.
+Only a cycle with no matching delivery record emits `watcher: FAILED - cycle ended without an actionable reason` and exits nonzero.
 
 The arm layer appends one tab-separated record per observed cycle to `state/.watch-cycle-exits.log`.
 Each record includes arm and watcher PIDs, start and end timestamps, exit code and signal, classified reason, beacon age, lock identity before and after close, and successor disposition.

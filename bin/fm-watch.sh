@@ -116,16 +116,9 @@ CHECK_TIMEOUT=${FM_CHECK_TIMEOUT:-30}     # seconds allowed per *.check.sh
 SIGNAL_GRACE=${FM_SIGNAL_GRACE:-30}   # seconds to linger after a signal so trailing
                                       # signals (a status write, then the same turn's
                                       # turn-end hook) coalesce into one wake
-# Busy signatures are selected by recorded harness unless FM_BUSY_REGEX globally
-# overrides them.
-# claude/codex: "esc to interrupt"; opencode: "esc interrupt"; pi: "Working...";
-# grok: "Ctrl+c:cancel". Claude's current spinner signature is matched only for
-# a recorded Claude task because an ellipsis followed by elapsed time is not a
-# safe shared signature for arbitrary harness output. Kimi's moon-plus-middot
-# spinner signature is likewise matched only for a recorded Kimi task.
-# Omp's "Working…" U+2026-ellipsis line is likewise matched only for a recorded
-# omp task (bin/fm-tmux-lib.sh owns the per-harness signatures).
-BUSY_REGEX=${FM_BUSY_REGEX:-'esc (to )?interrupt|Working\.\.\.|Ctrl\+c:cancel'}
+# Busy state is decided by the semantic contract in bin/fm-busy-lib.sh, which
+# is the single owner of per-harness sources, source attribution, and the one
+# remaining rendered-text fallback (Grok only).
 # Always-on wake triage: most wakes during a long crew validation are benign (a
 # working: note or turn-end while a pipeline runs, a no-change heartbeat). Rather
 # than wake firstmate's LLM for each, this watcher classifies every wake in bash
@@ -753,7 +746,9 @@ trap 'exit 1' HUP INT TERM
 WATCHER_PID=${BASHPID:-$$}
 printf '%s\n' "$FM_HOME" > "$WATCH_LOCK/fm-home" || true
 printf '%s\n' "$WATCH_PATH" > "$WATCH_LOCK/watcher-path" || true
-fm_pid_identity "$WATCHER_PID" > "$WATCH_LOCK/pid-identity" 2>/dev/null || true
+FM_WATCH_DELIVERY_PID=$WATCHER_PID
+FM_WATCH_DELIVERY_IDENTITY=$(fm_pid_identity "$WATCHER_PID" 2>/dev/null || true)
+printf '%s\n' "$FM_WATCH_DELIVERY_IDENTITY" > "$WATCH_LOCK/pid-identity" 2>/dev/null || true
 
 [ -e "$STATE/.last-heartbeat" ] || touch "$STATE/.last-heartbeat"
 

@@ -56,7 +56,7 @@ run_omp_spawn() {
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" TMUX="fake,1,0" \
     FM_FAKE_TMUX_LOG="$log" \
     PATH="$fakebin:$PATH" \
-    "$SPAWN" "$id" "$proj" "$@" 2>&1
+    "$SPAWN" "$id" "$proj" --mode no-mistakes --yolo off "$@" 2>&1
 }
 
 test_omp_spawn_writes_turnend_extension_and_launches() {
