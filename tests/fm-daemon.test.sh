@@ -924,6 +924,14 @@ test_tmux_composer_state_bordered_and_agent_rows_are_empty() {
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 \
     fm_tmux_composer_state "fakepane")
   [ "$out" = empty ] || fail "a bordered '│ > │' composer should read empty, got '$out'"
+  printf '╭─ π > ─╮\n╰─     ─╯\n' > "$capture"
+  out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = empty ] || fail "an empty omp bottom-border composer should read empty, got '$out'"
+  printf '╭─ π > ─╮\n╰─ go  ─╯\n' > "$capture"
+  out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = pending ] || fail "typed omp bottom-border content should read pending, got '$out'"
   printf '%s\n' "❯ " > "$capture"
   out=$(PATH="$fakebin:$PATH" FM_FAKE_TMUX_CAPTURE="$capture" FM_FAKE_TMUX_CURSOR_Y=0 \
     fm_tmux_composer_state "fakepane")

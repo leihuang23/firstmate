@@ -18,6 +18,12 @@ A cycle-end failure is benign when that live-watcher predicate is true, and the 
 Only an exhausted failure with no verified watcher emits one last-resort notice for the continuous failure episode; later consecutive Stop cycles exit 2 to guarantee another Stop-owned retry without repeating the notice until the turn-end guard consumes the attended fail-open.
 The Claude turn-end guard owns the monotonic failure progression, one-time attended fail-open, post-alarm continuation suppression, and positive recovery reset described in [`turnend-guard.md`](turnend-guard.md#harness-integrations).
 While supervision is still needed and away mode remains inactive, an actionable close wakes the idle session through exit 2.
+Omp's `.omp/extensions/fm-primary-omp-watch.ts` owns one tracked `bin/fm-watch-arm.sh --restart` child.
+After an actionable close it attempts one successor before delivering the follow-up.
+After a typed failure or spawn error it attempts a successor before delivery only while below `FM_WATCH_REARM_RETRY_LIMIT`.
+An actionable close resets the budget immediately, while the first verified `watcher: started` or `watcher: attached` output starts a monotonic stability clock and resets it only after the arm remains alive for `FM_OMP_WATCH_STABLE_MS` (30 seconds by default).
+When restoration succeeds, a rejected follow-up leaves the successor running and writes `state/.omp-watch-delivery-failed`, which stays outside watcher signal scans and is surfaced by the next session-start digest.
+Omp's blockable `session_stop` guard remains a bounded repair backstop and treats both in-flight tasks and X-mode-only relay polling as supervision need.
 
 ## Actionable wake ordering
 
@@ -30,6 +36,7 @@ This is deliberate Option B ordering: the fleet is protected before the model ha
 
 Claude's Stop hook starts the successor arm at the next Stop after the handling turn, rather than before notification as Pi and OpenCode do.
 The durable wake queue preserves actionable events during the residual active-turn window, and the bounded turn-end guard enforces recovery at Stop when no watcher or auto-arm claim is present.
+Omp has the same residual active-turn window, while its successor-first close handling and `session_stop` continuation close the gap before the handling turn can end.
 The model no longer re-arms after ordinary wakes.
 No PreToolUse hook denies fleet commands based on watcher status.
 A genuine auto-arm failure describes the automatic mechanism as broken and never directs a routine manual background arm.
@@ -38,7 +45,8 @@ Codex retains its bounded foreground checkpoint protocol.
 Grok retains its tracked background-task notification protocol.
 No adapter starts a replacement with shell `&`.
 
-The turn-end guard remains the final backstop rather than the normal continuity mechanism and cooperates with the auto-arm in its `--claude` mode.
+The turn-end guard remains the final backstop for Claude, Codex, OpenCode, Pi, and Grok and cooperates with the auto-arm in its `--claude` mode.
+For Omp, successor-first close handling is the normal re-arm path and the direct guard continuation is the bounded repair path.
 
 ## Arm-layer cycle contract
 
@@ -65,6 +73,7 @@ The same suite covers ordinary same-process session replacement for `/new`, `/re
 `tests/fm-watcher-lock.test.sh` covers verified-successor attach, the typed self-eviction failure, bounded and successor-linked lifecycle rows, and a SIGSTOP counterfactual that distinguishes a live PID from a stale beacon before classifying termination.
 `tests/fm-subagent-pretool-check.test.sh` proves Claude retains only the non-status Bash seatbelts.
 `tests/fm-claude-stop-autoarm.test.sh` covers the auto-arm's scope, stale and live session owners, unchanged AFK and need boundaries, single-flight, bounded failure retries, benign live-watcher cycle ends, one-notice failure episodes, and exit-2 translation.
+`tests/fm-omp-watch-extension.test.sh` covers Omp's tracked child, successor-first actionable and failure follow-ups, capped established failures, delayed readiness, and spawn errors, post-readiness stable-cycle budget reset, rejected-delivery persistence, lock ownership, direct guard continuation, X-mode-only supervision, and one-shot latch.
 `FM_CLAUDE_LIVE_E2E=1 tests/fm-claude-stop-autoarm-live-e2e.test.sh` starts with the reproduced stale-lock state, runs session start first, completes two tokenless cycles, and checks the competing-live-owner negative control.
 `tests/fm-turnend-guard.test.sh` covers the cooperative `--claude` guard, including monotonic failed-epoch progression, the integrated bounded fail-open, post-alarm continuation suppression, and positive recovery reset.
 
@@ -73,6 +82,7 @@ The same suite covers ordinary same-process session replacement for `/new`, `/re
 The goal is continuity without a Pi or OpenCode model-memory re-arm step.
 No zero-latency guarantee is claimed because lock verification, watcher startup, and bounded retry delays remain deliberate safety work.
 OpenCode support targets persistent TUI sessions rather than headless `opencode run`.
+Omp uses successor-before-wake restoration plus its blockable `session_stop` continuation.
 Claude depends on the Stop `asyncRewake` rewake, Grok retains native background-completion notifications, and Codex retains bounded foreground checkpoints.
 
-[`verification/supervision.md`](verification/supervision.md#watcher-continuity) records the current five-harness live evidence, the 2026-07-24 Stop-owned Claude auto-arm results, and exact opt-in commands.
+[`verification/supervision.md`](verification/supervision.md#watcher-continuity) records the current five-harness live evidence, Omp's deterministic successor coverage, the 2026-07-24 Stop-owned Claude auto-arm results, and exact opt-in commands.

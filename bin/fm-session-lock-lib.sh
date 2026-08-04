@@ -9,13 +9,13 @@
 # This file is sourced by scripts and has no side effects on source.
 
 # Known harness command names; extend when a new adapter is verified.
-FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$'
+FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$|^omp$'
 
 # The same harnesses as exact executable names. Keep in sync with
 # FM_HARNESS_RE. Used only for the stricter path evidence below, where the
 # loose regex would also match ordinary firstmate paths such as
 # bin/fm-claude-stop-autoarm.sh.
-FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi)
+FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi omp)
 
 # Print the exact harness name carried by executable path $1 - its own basename
 # or any directory component - or return 1.
@@ -47,8 +47,26 @@ fm_harness_path_name() {  # <path>
 #      argv[0] in `ps -o comm=`, while procps on Linux reports the kernel exec
 #      name and ignores argv[0] entirely, so a version-named Claude Code binary
 #      is identified by its install path on macOS and by argv[0] on Linux.
-#   3. a bare interpreter (node, python) running a harness script path.
+#   3. a bare interpreter (node, python, bun) running a harness script path.
 FM_HARNESS_IS_CLAUDE=0
+
+# omp runs either as its own command or as `bun <path>/omp ...`.
+# For bun, only the interpreter's script argument identifies the harness;
+# later `.omp/` config arguments must not self-match.
+fm_args_are_omp() {  # <comm> <args>
+  local comm=$1 args=${2-} script
+  case "$(basename -- "$comm")" in
+    omp) return 0 ;;
+    *bun*)
+      IFS=' ' read -r _ script _ <<EOF
+$args
+EOF
+      case "$script" in omp|*/omp) return 0 ;; esac
+      ;;
+  esac
+  return 1
+}
+
 fm_harness_process_matches() {  # <comm> <args>
   local comm=$1 args=$2 base argv0 name
   FM_HARNESS_IS_CLAUDE=0
@@ -62,9 +80,10 @@ fm_harness_process_matches() {  # <comm> <args>
     case "$name" in claude) FM_HARNESS_IS_CLAUDE=1 ;; esac
     return 0
   fi
-  # Bare interpreter (e.g. node): match the harness name in its script path.
+  # Bare interpreter (e.g. node, bun): match the harness name in its script path.
   case "$comm" in
-    *node*|*python*)
+    *node*|*python*|*bun*)
+      fm_args_are_omp "$comm" "$args" && return 0
       if printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"; then
         case "$args" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
         return 0

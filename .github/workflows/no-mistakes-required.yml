@@ -22,9 +22,14 @@ jobs:
   check:
     name: PR must be raised via no-mistakes
     runs-on: ubuntu-latest
+    # Automation authors are exempt: scheduled upstream sync (github-actions),
+    # dependency bots, and Copilot cloud agent conflict-resolution PRs.
     if: >-
       github.event.pull_request.user.login != 'github-actions[bot]' &&
-      github.event.pull_request.user.login != 'dependabot[bot]'
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      github.event.pull_request.user.login != 'Copilot' &&
+      github.event.pull_request.user.login != 'copilot-swe-agent' &&
+      github.event.pull_request.user.login != 'copilot-swe-agent[bot]'
     steps:
       - name: Verify no-mistakes signature in PR body
         env:
