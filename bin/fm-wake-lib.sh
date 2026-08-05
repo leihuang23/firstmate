@@ -112,6 +112,7 @@ fm_watcher_healthy() {
   FM_WATCHER_HEALTHY_PID=$pid
   # shellcheck disable=SC2034 # Read by callers after fm_watcher_healthy returns.
   FM_WATCHER_HEALTHY_IDENTITY=$identity
+<<<<<<< HEAD
   return 0
 }
 
@@ -188,6 +189,8 @@ fm_watcher_supervision_verdict() {
     # shellcheck disable=SC2034 # Read by callers after the function returns.
     FM_WATCHER_VERDICT_REASON=no-watcher
   fi
+=======
+>>>>>>> origin/main
   return 0
 }
 

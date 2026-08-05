@@ -91,7 +91,11 @@ add_quota_axi() {
   cat > "$fakebin/quota-axi" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
+<<<<<<< HEAD
   printf '%s\n' "${FM_FAKE_QUOTA_AXI_VERSION:-0.1.17}"
+=======
+  printf '%s\n' "${FM_FAKE_QUOTA_AXI_VERSION:-0.1.16}"
+>>>>>>> origin/main
   exit 0
 fi
 exit 0
@@ -337,6 +341,7 @@ ROWS
   pass "bootstrap enforces no-mistakes minimum version"
 }
 
+<<<<<<< HEAD
 test_gh_axi_min_version() {
   local label version mode case_dir fakebin out missing n
   missing='MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)'
@@ -449,6 +454,13 @@ ROWS
 
 # These rows exercise the real bootstrap check with a fake quota-axi answering
 # --version: below the floor produces MISSING, while at or above is silent.
+=======
+# 0.1.16 is the first quota-axi that reports per-credential auth sources and Grok
+# state.authStatus. Before it, a dispatch candidate could not be scoped to its own
+# authentication surface, which is exactly how one harness's expired CLI token
+# produced a captain-facing "log in" claim for a candidate that never read it. A
+# stale install used to pass this check silently, so the fix stayed uninstalled.
+>>>>>>> origin/main
 test_quota_axi_min_version() {
   local label version mode case_dir fakebin out missing n
   missing='MISSING: quota-axi (install: npm install -g quota-axi)'
@@ -460,6 +472,10 @@ test_quota_axi_min_version() {
     mkdir -p "$case_dir/home/config"
     printf '%s\n' manual > "$case_dir/home/config/backlog-backend"
     fakebin=$(make_fake_toolchain "$case_dir")
+<<<<<<< HEAD
+=======
+    add_tasks_axi "$fakebin" "0.1.1"
+>>>>>>> origin/main
     out=$(PATH="$fakebin:$BASE_PATH" FM_HOME="$case_dir/home" FM_ROOT_OVERRIDE="$case_dir/home" \
       FM_FAKE_TREEHOUSE_LEASE_HELP=1 FM_FAKE_QUOTA_AXI_VERSION="$version" "$ROOT/bin/fm-bootstrap.sh")
     case "$mode" in
@@ -469,11 +485,19 @@ test_quota_axi_min_version() {
         [ "$out" = "$missing" ] || fail "$label: expected '$missing', got: $out" ;;
     esac
   done <<'ROWS'
+<<<<<<< HEAD
 minimum quota-axi version is accepted^0.1.17^empty
 newer quota-axi patch is accepted^0.1.18^empty
 newer quota-axi minor is accepted^0.2.0^empty
 newer quota-axi major is accepted^1.0.0^empty
 the patch just below the floor reports an upgrade^0.1.16^missing
+=======
+minimum quota-axi version is accepted^0.1.16^empty
+newer quota-axi patch is accepted^0.1.17^empty
+newer quota-axi minor is accepted^0.2.0^empty
+newer quota-axi major is accepted^1.0.0^empty
+older quota-axi patch reports an upgrade^0.1.15^missing
+>>>>>>> origin/main
 much older quota-axi minor reports an upgrade^0.0.9^missing
 unparseable quota-axi version reports an upgrade^quota-axi development build^missing
 ROWS
@@ -951,9 +975,12 @@ ROWS
 
 test_bootstrap_reporting
 test_no_mistakes_min_version
+<<<<<<< HEAD
 test_gh_axi_min_version
 test_lavish_axi_min_version
 test_tasks_axi_min_version
+=======
+>>>>>>> origin/main
 test_quota_axi_min_version
 test_git_is_required_with_supported_install_instruction
 test_orca_backend_gates_orca_tool_only_when_selected

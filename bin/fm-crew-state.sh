@@ -64,8 +64,11 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
+<<<<<<< HEAD
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
+=======
+>>>>>>> origin/main
 
 ID=${1:-}
 [ -n "$ID" ] || { echo "usage: fm-crew-state.sh <id>" >&2; exit 2; }

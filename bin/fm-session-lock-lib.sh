@@ -9,13 +9,21 @@
 # This file is sourced by scripts and has no side effects on source.
 
 # Known harness command names; extend when a new adapter is verified.
+<<<<<<< HEAD
 FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$'
+=======
+FM_HARNESS_RE='claude|codex|opencode|grok|kimi|^pi$|^pi-signed$|^omp$'
+>>>>>>> origin/main
 
 # The same harnesses as exact executable names. Keep in sync with
 # FM_HARNESS_RE. Used only for the stricter path evidence below, where the
 # loose regex would also match ordinary firstmate paths such as
 # bin/fm-claude-stop-autoarm.sh.
+<<<<<<< HEAD
 FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi)
+=======
+FM_HARNESS_NAMES=(claude codex opencode grok kimi pi-signed pi omp)
+>>>>>>> origin/main
 
 # Print the exact harness name carried by executable path $1 - its own basename
 # or any directory component - or return 1.
@@ -47,6 +55,7 @@ fm_harness_path_name() {  # <path>
 #      argv[0] in `ps -o comm=`, while procps on Linux reports the kernel exec
 #      name and ignores argv[0] entirely, so a version-named Claude Code binary
 #      is identified by its install path on macOS and by argv[0] on Linux.
+<<<<<<< HEAD
 #   3. a bare interpreter (node, python) running a harness script path.
 FM_HARNESS_IS_CLAUDE=0
 fm_harness_process_matches() {  # <comm> <args>
@@ -69,11 +78,57 @@ fm_harness_process_matches() {  # <comm> <args>
         case "$args" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
         return 0
       fi
+=======
+#   3. a bare interpreter (node, python, bun) running a harness script path.
+FM_HARNESS_IS_CLAUDE=0
+
+# omp runs either as its own command or as `bun <path>/omp ...`.
+# For bun, only the interpreter's script argument identifies the harness;
+# later `.omp/` config arguments must not self-match.
+fm_args_are_omp() {  # <comm> <args>
+  local comm=$1 args=${2-} script
+  case "$(basename -- "$comm")" in
+    omp) return 0 ;;
+    *bun*)
+      IFS=' ' read -r _ script _ <<EOF
+$args
+EOF
+      case "$script" in omp|*/omp) return 0 ;; esac
+>>>>>>> origin/main
       ;;
   esac
   return 1
 }
 
+<<<<<<< HEAD
+=======
+fm_harness_process_matches() {  # <comm> <args>
+  local comm=$1 args=$2 base argv0 name
+  FM_HARNESS_IS_CLAUDE=0
+  base=$(basename -- "$comm")
+  if printf '%s' "$base" | grep -qE "$FM_HARNESS_RE"; then
+    case "$base" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
+    return 0
+  fi
+  argv0=${args%% *}
+  if name=$(fm_harness_path_name "$comm") || name=$(fm_harness_path_name "$argv0"); then
+    case "$name" in claude) FM_HARNESS_IS_CLAUDE=1 ;; esac
+    return 0
+  fi
+  # Bare interpreter (e.g. node, bun): match the harness name in its script path.
+  case "$comm" in
+    *node*|*python*|*bun*)
+      fm_args_are_omp "$comm" "$args" && return 0
+      if printf '%s' "$args" | grep -qE "$FM_HARNESS_RE"; then
+        case "$args" in *claude*) FM_HARNESS_IS_CLAUDE=1 ;; esac
+        return 0
+      fi
+      ;;
+  esac
+  return 1
+}
+
+>>>>>>> origin/main
 # Walk the current process ancestry (up to 16 hops) and print this session's
 # contiguous verified-harness ancestry, innermost pid first.
 #

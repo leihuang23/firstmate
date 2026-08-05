@@ -96,7 +96,7 @@ tests/fm-crew-state.test.sh
 
 ## Turn-end guard
 
-The direct and passive mechanisms were validated across all five harnesses on 2026-07-08 through 2026-07-12, with Claude's replacement Stop-owned path revalidated on 2026-07-24.
+The direct and passive mechanisms were validated across all six harnesses on 2026-07-08 through 2026-07-26, with Claude's replacement Stop-owned path revalidated on 2026-07-24 and the Omp integration validated on 2026-07-26.
 
 | Harness | Version verified | Mechanism | Observed result |
 | --- | --- | --- | --- |
@@ -104,6 +104,10 @@ The direct and passive mechanisms were validated across all five harnesses on 20
 | Codex | 0.142.1 | Blocking `Stop` hook | Hook process root stayed anchored to the trusted checkout and one continuation ran. |
 | OpenCode | 1.17.6 | Passive `session.idle` callback | Throwing could not block, while `promptAsync` scheduled one TUI follow-up; headless remained fail-open. |
 | Pi | 0.80.5 | Passive `agent_settled` callback | Exactly one guard follow-up ran for an unhealthy cycle, with no recursion across tool turns. |
+<<<<<<< HEAD
+=======
+| Omp | 17.1.3 | Blocking `session_stop` extension event | `{ continue: true, additionalContext }` forced one continuation in print mode; with fake in-flight work and no watcher the continuation ran session start (acquiring the lock through the omp bun-ancestry detection) and armed the watcher through `fm_watch_arm_omp`. The extension latch allowed the continuation's own stop exactly once, and omp caps consecutive continuations at 8. |
+>>>>>>> origin/main
 | Grok | 0.2.112 native and 0.2.73 pre-native | Running-payload adaptive `Stop` | Native false-to-true continuation stayed in one process with two model turns and zero resume launches; the field-absent pre-native process launched exactly one guarded resume. |
 
 The Grok adaptive matrix ran on 2026-07-28 with separate scratch repositories and homes, dedicated tmux sockets, one target plus one control window, ambient tmux variables removed, and a socket-bound wrapper first in `PATH`.
@@ -151,6 +155,7 @@ Current entry points:
 ```sh
 tests/fm-turnend-guard.test.sh
 tests/fm-supervision-instructions.test.sh
+tests/fm-omp-watch-extension.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
 FM_GROK_STOP_LIVE_E2E=1 FM_GROK_NATIVE_BIN="$native_grok" FM_GROK_LEGACY_BIN="$pre_native_grok" tests/fm-grok-stop-live-e2e.test.sh
 ```
@@ -171,6 +176,7 @@ fm-doc-audience-check: ok surfaces=61 local_links=174
 FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=102585
 ```
 
+<<<<<<< HEAD
 The model-aware pull-guard predicate correction (`bin/fm-guard.sh` no longer reports a false watcher-down mid-turn under the Claude Stop auto-arm model, where the watcher runs only between turns) was verified on 2026-08-04 with the installed ShellCheck 0.11.0 and the same isolated behavior suites.
 
 ```sh
@@ -187,6 +193,8 @@ fm-doc-audience-check: ok surfaces=64 local_links=188
 FM_TEST_SUMMARY total=4 failed=0 skipped_gate=0 duration_ms=80078
 ```
 
+=======
+>>>>>>> origin/main
 The broader relevant regression pass was rerun on 2026-08-02 without live-home or daemon mutation.
 
 ```sh
@@ -255,6 +263,7 @@ tests/fm-watcher-lock.test.sh
 tests/fm-subagent-pretool-check.test.sh
 tests/fm-claude-stop-autoarm.test.sh
 tests/fm-turnend-guard.test.sh
+tests/fm-omp-watch-extension.test.sh
 ```
 
 ## Wedge-alarm channels

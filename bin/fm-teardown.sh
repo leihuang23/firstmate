@@ -146,12 +146,17 @@ SUB_HOME_PARENT_MARKER=".fm-secondmate-parent"
 . "$SCRIPT_DIR/fm-public-followup-lib.sh"
 # shellcheck source=bin/fm-secondmate-registry-lib.sh
 . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+<<<<<<< HEAD
 # shellcheck source=bin/fm-secondmate-parent-lib.sh
 . "$SCRIPT_DIR/fm-secondmate-parent-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 # shellcheck source=bin/fm-nm-run-lib.sh
 . "$SCRIPT_DIR/fm-nm-run-lib.sh"
+=======
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
+>>>>>>> origin/main
 if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
   echo "error: invalid teardown request" >&2
   exit 2
@@ -309,9 +314,15 @@ remote_secondmate_teardown() {
   }
   "$FM_ROOT/bin/fm-guard.sh" || true
   if [ "$FORCE" = --force ]; then
+<<<<<<< HEAD
     if out=$("$SCRIPT_DIR/fm-on.sh" "$ID" fm-remote-secondmate-control.sh retire "$ID" --force < /dev/null 2>&1); then rc=0; else rc=$?; fi
   else
     if out=$("$SCRIPT_DIR/fm-on.sh" "$ID" fm-remote-secondmate-control.sh retire "$ID" < /dev/null 2>&1); then rc=0; else rc=$?; fi
+=======
+    if out=$("$SCRIPT_DIR/fm-on.sh" "$ID" fm-remote-secondmate-control.sh retire "$ID" --force 2>&1); then rc=0; else rc=$?; fi
+  else
+    if out=$("$SCRIPT_DIR/fm-on.sh" "$ID" fm-remote-secondmate-control.sh retire "$ID" 2>&1); then rc=0; else rc=$?; fi
+>>>>>>> origin/main
   fi
   if [ "$rc" -ne 0 ]; then
     [ -z "$out" ] || printf '%s\n' "$out" >&2
@@ -405,6 +416,7 @@ PUBLIC_FOLLOWUP_WORK_HOME=main
 PUBLIC_FOLLOWUP_PARENT_UNRESOLVED=0
 PUBLIC_FOLLOWUP_PARENT_RELAY_ACTIVE=0
 PUBLIC_FOLLOWUP_RELAY_ACTIVE=0
+<<<<<<< HEAD
 public_followup_canonical_home() {
   local home=$1
   case "$home" in /*) ;; *) return 1 ;; esac
@@ -415,6 +427,14 @@ public_followup_resolve_primary_home() {
   fm_pf_home_id_valid "secondmate:$id" || return 1
   parent=$(public_followup_canonical_home "$parent") || return 1
   child=$(public_followup_canonical_home "$child") || return 1
+=======
+public_followup_resolve_primary_home() {
+  local parent=$1 child=$2 id=$3 parent_meta registry meta_home
+  fm_pf_home_id_valid "secondmate:$id" || return 1
+  case "$parent" in /*) ;; *) return 1 ;; esac
+  parent=$(CDPATH='' cd -- "$parent" 2>/dev/null && pwd -P) || return 1
+  child=$(CDPATH='' cd -- "$child" 2>/dev/null && pwd -P) || return 1
+>>>>>>> origin/main
   [ "$parent" != "$child" ] || return 1
   parent_meta="$parent/state/$id.meta"
   [ -f "$parent_meta" ] && [ ! -L "$parent_meta" ] || return 1
@@ -428,6 +448,7 @@ public_followup_resolve_primary_home() {
 }
 if [ -f "$FM_HOME/$SUB_HOME_MARKER" ]; then
   SECOND_MATE_ID=$(sed -n '1p' "$FM_HOME/$SUB_HOME_MARKER")
+<<<<<<< HEAD
   # The durable parent record (written once at seeding, next to the identity
   # marker) names this home's route to its parent: "local" when they share a
   # filesystem, "remote" when the parent lives on another machine. Absent for
@@ -486,6 +507,24 @@ if [ -f "$FM_HOME/$SUB_HOME_MARKER" ]; then
       PUBLIC_FOLLOWUP_WORK_HOME="secondmate:$SECOND_MATE_ID"
       if PUBLIC_FOLLOWUP_HOME=$(public_followup_resolve_primary_home \
           "$PRIMARY_HOME_CANDIDATE" "$FM_HOME" "$SECOND_MATE_ID"); then
+=======
+  # A marked child only enters the primary-binding path when the authoritative
+  # parent relay is active. A child that has not opted into the relay must
+  # retain the old teardown path, even without a durable parent registry.
+  if [ -n "${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-}" ]; then
+    if fm_pf_relay_active "$FM_PUBLIC_FOLLOWUP_PRIMARY_HOME"; then
+      PUBLIC_FOLLOWUP_PARENT_RELAY_ACTIVE=1
+    fi
+  elif fm_pf_relay_active "$FM_HOME"; then
+    PUBLIC_FOLLOWUP_PARENT_RELAY_ACTIVE=1
+  fi
+  if [ "$PUBLIC_FOLLOWUP_PARENT_RELAY_ACTIVE" = 1 ]; then
+    PUBLIC_FOLLOWUP_PARENT_UNRESOLVED=1
+    if fm_pf_home_id_valid "secondmate:$SECOND_MATE_ID"; then
+      PUBLIC_FOLLOWUP_WORK_HOME="secondmate:$SECOND_MATE_ID"
+      if PUBLIC_FOLLOWUP_HOME=$(public_followup_resolve_primary_home \
+          "${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-}" "$FM_HOME" "$SECOND_MATE_ID"); then
+>>>>>>> origin/main
         PUBLIC_FOLLOWUP_STATE="$PUBLIC_FOLLOWUP_HOME/state"
         PUBLIC_FOLLOWUP_PARENT_UNRESOLVED=0
         if [ "$FORCE" != "--force" ] \
@@ -498,6 +537,7 @@ if [ -f "$FM_HOME/$SUB_HOME_MARKER" ]; then
       fi
     fi
   else
+<<<<<<< HEAD
     # A home seeded before the durable record existed retains the legacy
     # launch-time binding behavior unchanged.
     PRIMARY_HOME_CANDIDATE=${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-}
@@ -529,6 +569,10 @@ if [ -f "$FM_HOME/$SUB_HOME_MARKER" ]; then
       PUBLIC_FOLLOWUP_HOME=
       PUBLIC_FOLLOWUP_STATE=
     fi
+=======
+    PUBLIC_FOLLOWUP_HOME=
+    PUBLIC_FOLLOWUP_STATE=
+>>>>>>> origin/main
   fi
 elif [ "$KIND" = secondmate ]; then
   PUBLIC_FOLLOWUP_WORK_HOME="secondmate:$ID"
@@ -2078,6 +2122,7 @@ cleanup_firstmate_home_children() {
     retire_busy_state "$sub_state" "$child_id" "$child_busy_gen" || return 1
     rm -f "$sub_state/$child_id.status" "$sub_state/$child_id.turn-ended" \
       "$sub_state/$child_id.meta" "$sub_state/$child_id.pi-ext.ts" \
+      "$sub_state/$child_id.omp-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token"
   done
 }
@@ -2189,6 +2234,7 @@ if [ -d "$WT" ] && [ "$FORCE" != "--force" ]; then
   fi
 fi
 
+<<<<<<< HEAD
 # Every landed/discard-work refusal above has now passed (or --force skipped
 # them). Fix 1 and Fix 2 (see script header) run here, unconditionally on
 # --force, and before ANY destructive step below - a still-parked run or a
@@ -2201,6 +2247,8 @@ if [ "$KIND" != secondmate ]; then
   reap_task_worktree_processes worktree "$WT" "$TASK_TMP"
 fi
 
+=======
+>>>>>>> origin/main
 # A Herdr close may reposition shared workspace order, so the whole
 # destructive sequence below (worktree return, pane close, record removal)
 # runs under the named-session presentation lock, acquired BEFORE anything is
@@ -2340,8 +2388,8 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
-  "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \
-  "$STATE/$ID.kimi-turnend-token"
+  "$STATE/$ID.pi-ext.ts" "$STATE/$ID.omp-ext.ts" \
+  "$STATE/$ID.grok-turnend-token" "$STATE/$ID.kimi-turnend-token"
 if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$MODE" != local-only ]; then
   "$FM_ROOT/bin/fm-fleet-sync.sh" "$PROJ" || true
 fi

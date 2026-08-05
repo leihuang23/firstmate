@@ -309,7 +309,11 @@ remote_deliver_outbox() { # <secondmate-id> <outbox-path>
   fi
   rm -f -- "$snapshot"
   if ! receive_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-backlog-receive.sh \
+<<<<<<< HEAD
     "$remote_rel" "$bytes" "$hash" "$generation" < /dev/null 2>&1); then
+=======
+    "$remote_rel" "$bytes" "$hash" "$generation" 2>&1); then
+>>>>>>> origin/main
     [ -z "$receive_out" ] || printf '%s\n' "$receive_out" >&2
     echo "error: handoff receipt by $id was unavailable or completion is unknown; outbox preserved at $outbox" >&2
     return 1
@@ -355,7 +359,11 @@ remote_handoff() { # <secondmate-id> <keys...>
   validate_backlog_file "main backlog" "$MAIN_BACKLOG" || return 1
   validate_backlog_file "remote handoff outbox" "$outbox" || return 1
   fm_tasks_axi_compatible || {
+<<<<<<< HEAD
     echo "error: a compatible tasks-axi with atomic multi-ID mv support is required to stage remote handoffs; run bin/fm-bootstrap.sh for the required version" >&2
+=======
+    echo "error: tasks-axi with atomic multi-ID mv support (0.2.2+) is required to stage remote handoffs" >&2
+>>>>>>> origin/main
     return 1
   }
   to_move=()

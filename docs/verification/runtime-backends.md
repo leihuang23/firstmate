@@ -123,6 +123,11 @@ Backend applicability was reviewed across every spawn adapter.
 Tmux needs the exact `pi-launcher`, `pi-signed`, `pi`, and `Pi` process identities for recovery-grade liveness.
 Herdr uses native registered-agent state and needs no process-name branch.
 Zellij has no verified recovery-grade agent process probe, while Orca and cmux do not support secondmate spawns, so those three retain their existing generic ordinary-launch semantics without a new liveness matcher.
+<<<<<<< HEAD
+=======
+
+Oh My Pi 17.1.3 was observed as a generic `bun` process on 2026-07-26 (the binary is a `#!/usr/bin/env bun` script) and is intentionally inconclusive for the same reason Pi's generic `node` process was; callers never treat `unknown` as dead.
+>>>>>>> origin/main
 
 The structural multi-row composer reader, Kimi pointer-delivery path, and OpenCode 1.18.4 busy-queue behavior are pinned by:
 
@@ -166,7 +171,11 @@ Claude, Codex, OpenCode, Pi, pi-signed, Grok, and Kimi share that backend cleanu
 ## Herdr
 
 The compatibility floor is protocol 14.
+<<<<<<< HEAD
 The presentation-projection suite's latest active verification uses Herdr 0.8.0 protocol 19 on macOS aarch64, every other section's latest uses Herdr 0.7.5 protocol 17 on macOS aarch64, and earlier 0.7.5 protocol-16, 0.7.4, protocol-14, and 0.7.3 evidence is retained where it defines current behavior or fallbacks.
+=======
+The latest active verification uses Herdr 0.7.5 protocol 17 on macOS aarch64, with earlier 0.7.5 protocol-16, 0.7.4, protocol-14, and 0.7.3 evidence retained where they define current behavior or fallbacks.
+>>>>>>> origin/main
 Protocol 17 keeps every protocol-16 feature gate satisfied; the event and workspace-move floors remain 16.
 
 Core read-only probes:

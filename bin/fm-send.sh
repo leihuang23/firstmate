@@ -261,7 +261,11 @@ fi
 
 if [ "${1:-}" = "--key" ]; then
   if [ "$TARGET_BACKEND" = remote ]; then
+<<<<<<< HEAD
     if ! "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh key "$TARGET_REMOTE_ID" "$2" < /dev/null; then
+=======
+    if ! "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh key "$TARGET_REMOTE_ID" "$2"; then
+>>>>>>> origin/main
       echo "error: key '$2' not sent to remote secondmate $TARGET_REMOTE_ID; completion may be unknown" >&2
       exit 1
     fi
@@ -318,7 +322,11 @@ else
   # verdict preserves the loud refusal boundary.
   send_rc=0
   if [ "$TARGET_BACKEND" = remote ]; then
+<<<<<<< HEAD
     if "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh send "$TARGET_REMOTE_ID" "$MESSAGE" < /dev/null >/dev/null; then
+=======
+    if "$SCRIPT_DIR/fm-on.sh" "$TARGET_REMOTE_ID" fm-remote-secondmate-control.sh send "$TARGET_REMOTE_ID" "$MESSAGE" >/dev/null; then
+>>>>>>> origin/main
       verdict=empty
     else
       send_rc=$?

@@ -1884,6 +1884,7 @@ test_herdr_projection_teardown_retains_journal_when_close_unconfirmed() {
   assert_not_contains "$(cat "$log")" "workspace close" \
     "unconfirmed projected close must not escalate to workspace cleanup"
   pass "herdr projection teardown retains every record when post-close presence is unknown"
+<<<<<<< HEAD
 }
 
 # --- Fix 1: conclude/abort the task's own parked no-mistakes run before the
@@ -2473,6 +2474,8 @@ EOF
   assert_grep "reap-already-happened" "$case_dir/order.log" \
     "abort-then-reap-then-remove-order: the leaked process was not yet reaped when the worktree return ran"
   pass "the run abort and the leaked-process reap both complete before the destructive worktree return"
+=======
+>>>>>>> origin/main
 }
 
 test_local_only_fork_remote_allows

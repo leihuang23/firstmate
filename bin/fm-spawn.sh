@@ -51,8 +51,13 @@
 #   outside herdr has no workspace to inherit and uses this home's own labeled
 #   workspace, which must then match exactly one. --secondmate is the deliberate
 #   exception: it stands up that secondmate home's own workspace.
+<<<<<<< HEAD
 #   Herdr additionally uses a default-on presentation-only layout unless the
 #   local config/herdr-presentation-spaces file says off. A clean fresh task first
+=======
+#   Herdr additionally supports a default-off presentation-only layout when the
+#   local config/herdr-presentation-spaces flag exists. A clean fresh task first
+>>>>>>> origin/main
 #   writes state/<id>.herdr-presentation atomically, then creates a disposable
 #   workspace containing only the ordinary task pane. A successful clean create
 #   upgrades its attempt journal with exact home, session, workspace, tab, pane,
@@ -83,7 +88,11 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
+<<<<<<< HEAD
 #   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi)
+=======
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
+>>>>>>> origin/main
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. pi-signed launches that exact executable name from PATH and
@@ -127,6 +136,10 @@
 #                  written by this script; outside the worktree to avoid pi's trust gate)
 #     __PITURNEND__ absolute path to .pi/extensions/fm-primary-turnend-guard.ts in a pi secondmate home
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
+#     __OMPEXT__    absolute path to state/<task-id>.omp-ext.ts (omp turn-end extension,
+#                  written by this script; in state/ so the worktree stays pristine)
+#     __OMPTURNEND__ absolute path to .omp/extensions/fm-primary-turnend-guard.ts in an omp secondmate home
+#     __OMPWATCH__   absolute path to .omp/extensions/fm-primary-omp-watch.ts in an omp secondmate home
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
@@ -376,7 +389,11 @@ spawn_remote_secondmate() {
     harness=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
   fi
   case "$harness" in
+<<<<<<< HEAD
     claude|codex|opencode|pi|pi-signed|grok|kimi) ;;
+=======
+    claude|codex|opencode|pi|pi-signed|grok|kimi|omp) ;;
+>>>>>>> origin/main
     *)
       fm_lock_release "$registry_lock" || true
       fm_lock_release "$SPAWN_TASK_LOCK" || true
@@ -495,7 +512,11 @@ spawn_remote_secondmate() {
   launch_args=("$id" "$harness" "$model" "$effort" "$backend")
   [ -z "$remote_traceparent" ] || launch_args+=("$remote_traceparent")
   if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh launch \
+<<<<<<< HEAD
     "${launch_args[@]}" < /dev/null 2>&1); then
+=======
+    "${launch_args[@]}" 2>&1); then
+>>>>>>> origin/main
     rc=0
   else
     rc=$?
@@ -783,7 +804,11 @@ FIRSTMATE_HOME=
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
+<<<<<<< HEAD
     ''|claude|codex|opencode|pi|pi-signed|grok|kimi)
+=======
+    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
+>>>>>>> origin/main
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -834,6 +859,23 @@ launch_template() {
         printf '%s%s' "$harness" ' __MODELFLAG____EFFORTFLAG__-e __PITURNEND__ -e __PIWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
         printf '%s%s' "$harness" ' __MODELFLAG____EFFORTFLAG__-e __PIEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+<<<<<<< HEAD
+=======
+      fi
+      ;;
+    # omp (Oh My Pi, binary `omp`, a pi-mono fork): a positional prompt starts
+    # the supervised interactive session (verified 2026-07-26 on 17.1.3).
+    # --auto-approve skips every tool-approval prompt, which an unattended
+    # crewmate needs. omp loads explicit -e extension paths without any trust
+    # gate (verified), so the turn-end extension rides the launch line exactly
+    # like pi's. omp has no permission-free default, so --auto-approve stays on
+    # both kinds.
+    omp)
+      if [ "$kind" = secondmate ]; then
+        printf '%s' 'omp --auto-approve __MODELFLAG____EFFORTFLAG__-e __OMPTURNEND__ -e __OMPWATCH__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+      else
+        printf '%s' 'omp --auto-approve __MODELFLAG____EFFORTFLAG__-e __OMPEXT__ "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+>>>>>>> origin/main
       fi
       ;;
     # grok (Grok Build TUI): a positional prompt starts the supervised interactive
@@ -961,7 +1003,11 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
+<<<<<<< HEAD
     claude|codex|opencode|pi|pi-signed|grok|kimi)
+=======
+    claude|codex|opencode|pi|pi-signed|grok|kimi|omp)
+>>>>>>> origin/main
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -996,6 +1042,14 @@ effort_flag_for_harness() {
     pi|pi-signed)
       # Pi 0.80.6 accepts the full shared effort vocabulary, including max, through
       # its --thinking flag.
+      case "$effort" in
+        low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
+      esac
+      ;;
+    omp)
+      # omp --thinking accepts off|minimal|low|medium|high|xhigh|max|auto
+      # (verified 2026-07-26 on 17.1.3 via `omp --help`); the full shared effort
+      # vocabulary maps through the same flag as pi's.
       case "$effort" in
         low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
       esac
@@ -1891,6 +1945,8 @@ EOF
 // "turn_end" fires at every inner turn boundary (one LLM response plus its
 // tool calls) and stays a wake NOTIFICATION touch for the watcher, never
 // current-state truth.
+<<<<<<< HEAD
+=======
 import { execFile } from "node:child_process";
 const busyEvent = (state: string, event: string) =>
   new Promise<void>((resolve) => {
@@ -1906,6 +1962,44 @@ export default function (pi: any) {
     return busyEvent("idle", "agent-settled");
   });
   pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
+}
+EOF
+      ;;
+    omp*)
+      # omp has no project-trust gate for extensions (verified 2026-07-26 on
+      # 17.1.3), but the explicit -e path lives in state/ anyway so the worktree
+      # stays pristine and teardown owns cleanup, same shape as pi.
+      # omp has no verified semantic busy source yet (bin/fm-busy-lib.sh owns
+      # that contract), so only the turn-end wake NOTIFICATION is wired here.
+      if ! omp_turnend_literal=$(node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$TURNEND"); then
+        echo "error: could not encode the omp turn-end path" >&2
+        exit 1
+      fi
+      cat > "$STATE/$ID.omp-ext.ts" <<EOF
+// Firstmate turn-end signal; written by fm-spawn.
+// Use "turn_end" (fires after each turn the agent finishes), not "agent_end"
+// (fires once, only when the whole run exits): the watcher needs a signal at
+// every turn boundary so an idle crewmate is surfaced, not just at shutdown.
+>>>>>>> origin/main
+import { execFile } from "node:child_process";
+const busyEvent = (state: string, event: string) =>
+  new Promise<void>((resolve) => {
+    execFile("$FM_ROOT/bin/fm-busy-event.sh", [
+      "apply", "$STATE_REAL", "$ID", state,
+      "--gen", "$BUSY_GEN", "--source", "pi-ext", "--event", event,
+    ], () => resolve());
+  });
+export default function (pi: any) {
+<<<<<<< HEAD
+  pi.on("agent_start", () => busyEvent("busy", "agent-start"));
+  pi.on("agent_settled", (_event: any, ctx: any) => {
+    if (ctx && typeof ctx.isIdle === "function" && !ctx.isIdle()) return;
+    return busyEvent("idle", "agent-settled");
+  });
+  pi.on("turn_end", () => execFile("touch", ["$TURNEND"]));
+=======
+  pi.on("turn_end", () => execFile("touch", [$omp_turnend_literal]));
+>>>>>>> origin/main
 }
 EOF
       ;;
@@ -2081,6 +2175,9 @@ sq_turnend=$(shell_quote "$TURNEND")
 sq_piext=$(shell_quote "$STATE/$ID.pi-ext.ts")
 sq_piturnend=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-turnend-guard.ts")
 sq_piwatch=$(shell_quote "$PROJ_ABS/.pi/extensions/fm-primary-pi-watch.ts")
+sq_ompext=$(shell_quote "$STATE/$ID.omp-ext.ts")
+sq_ompturnend=$(shell_quote "$PROJ_ABS/.omp/extensions/fm-primary-turnend-guard.ts")
+sq_ompwatch=$(shell_quote "$PROJ_ABS/.omp/extensions/fm-primary-omp-watch.ts")
 sq_opinput=$(shell_quote "$FM_ROOT/bin/fm-operational-input.sh")
 MODELFLAG=$(model_flag_for_harness "$HARNESS" "$MODEL")
 EFFORTFLAG=$(effort_flag_for_harness "$HARNESS" "$EFFORT")
@@ -2091,6 +2188,9 @@ LAUNCH=${LAUNCH//__TURNEND__/$sq_turnend}
 LAUNCH=${LAUNCH//__PIEXT__/$sq_piext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
+LAUNCH=${LAUNCH//__OMPEXT__/$sq_ompext}
+LAUNCH=${LAUNCH//__OMPTURNEND__/$sq_ompturnend}
+LAUNCH=${LAUNCH//__OMPWATCH__/$sq_ompwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
@@ -2105,10 +2205,13 @@ fi
 if [ "$KIND" = secondmate ]; then
   sq_home=$(shell_quote "$PROJ_ABS")
   sq_primary_home=$(shell_quote "$FM_HOME")
+<<<<<<< HEAD
   case "$HARNESS" in
     claude) supervision_model=autoarm ;;
     *) supervision_model=persistent ;;
   esac
+=======
+>>>>>>> origin/main
   # Deliver the primary's EFFECTIVE trace-context decision as a normalized on/off
   # literal (never the raw FM_TRACE_CONTEXT string) so a FM_TRACE_CONTEXT override
   # on the primary reaches the secondmate's OWN workers, not just the copied
@@ -2116,7 +2219,11 @@ if [ "$KIND" = secondmate ]; then
   # not enable them across the launch boundary (bin/fm-trace-context-lib.sh header).
   # Reuse the single frozen decision from the carrier resolution above so the
   # injected carrier and this on/off snapshot are guaranteed to agree.
+<<<<<<< HEAD
   LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_PUBLIC_FOLLOWUP_PRIMARY_HOME=$sq_primary_home FM_HOME=$sq_home FM_TRACE_CONTEXT=$SPAWN_TRACE_EFFECTIVE FM_SUPERVISION_MODEL=$supervision_model $LAUNCH"
+=======
+  LAUNCH="FM_ROOT_OVERRIDE= FM_STATE_OVERRIDE= FM_DATA_OVERRIDE= FM_PROJECTS_OVERRIDE= FM_CONFIG_OVERRIDE= FM_PUBLIC_FOLLOWUP_PRIMARY_HOME=$sq_primary_home FM_HOME=$sq_home FM_TRACE_CONTEXT=$SPAWN_TRACE_EFFECTIVE $LAUNCH"
+>>>>>>> origin/main
 fi
 # Export GOTMPDIR into the crewmate's pane shell so the agent and every child
 # process (go build, go test, ...) inherit it. Sent before the launch command so

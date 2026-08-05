@@ -2,14 +2,26 @@
 # Shared quota-axi compatibility floor for the bootstrap diagnostic.
 # Usage: . bin/fm-quota-axi-lib.sh
 #
+<<<<<<< HEAD
 # FM_QUOTA_AXI_MIN follows the axi-family floor policy owned beside the floor
 # constants in bin/fm-bootstrap.sh.
+=======
+# 0.1.16 is the floor because it is the first build that reports each provider's
+# credential sources independently and exposes Grok `state.authStatus`. Without
+# those fields a dispatch candidate cannot be checked against the authentication
+# surface it actually uses, which is how one harness's expired CLI token used to
+# produce a captain-facing sign-out claim for a candidate that never read it.
+>>>>>>> origin/main
 #
 # This file is the single owner of that version number. bin/fm-bootstrap.sh
 # turns a failing check into the operator-facing MISSING diagnostic, which is
 # what keeps an older build from reaching a dispatch intake at all.
 
+<<<<<<< HEAD
 FM_QUOTA_AXI_MIN=0.1.17
+=======
+FM_QUOTA_AXI_MIN=0.1.16
+>>>>>>> origin/main
 
 fm_quota_axi_compatible() {
   local timeout=${1:-} output parts major minor patch extra

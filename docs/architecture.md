@@ -60,15 +60,25 @@ That block owns the live wait shape for the running primary harness: Claude's St
 `bin/fm-watch-arm.sh` remains the verified arm wrapper for protocols that call it; it forks the watcher as a tracked child, verifies it is genuinely alive with a fresh liveness beacon, and prints an honest `started`, `attached`, or nonzero `FAILED` status.
 [`watcher-continuity.md`](watcher-continuity.md#arm-layer-cycle-contract) owns the arm layer's successor, terminal-delivery, and typed clean-close failure contract.
 The arm layer records one bounded lifecycle row per observed cycle in `state/.watch-cycle-exits.log`; `state/.watch-triage.log` remains exclusively the absorbed-wake debug log.
+<<<<<<< HEAD
 Pi and OpenCode verify session-lock ownership and launch one singleton successor from their child-close handlers before delivering an actionable wake prompt, with bounded exponential retry for failed restoration.
+=======
+Pi, OpenCode, and Omp verify session-lock ownership and launch one singleton successor from their child-close handlers before delivering an actionable wake prompt, with bounded exponential retry for failed restoration.
+>>>>>>> origin/main
 Claude's `bin/fm-claude-stop-autoarm.sh` hook fires on every Stop and, when the home is eligible and still needs supervision, claims one home-scoped cycle, foregrounds the arm wrapper, and translates actionable closes into exit-2 rewakes.
 It suppresses failed-looking closes when the same identity-matched watcher is healthy, retries genuine failures within a bound, and coordinates exhausted failure episodes with the Claude turn-end guard as documented in [`turnend-guard.md`](turnend-guard.md).
 [`watcher-continuity.md`](watcher-continuity.md) owns Claude's residual active-turn coverage and watcher-status command-gating boundary.
 The existing turn-end guard remains the final backstop for all five harness-engine protocols, with pi-signed sharing Pi's protocol and the `--claude` mode cooperating with the auto-arm claim.
 Its `--restart` mode signals only the watcher recorded in the current home's `state/.watch.lock`, so restarting one home cannot kill sibling secondmate watchers.
+<<<<<<< HEAD
 A pull-based guard (`bin/fm-guard.sh`) warns through supervision tool output if the primary checkout is tangled, if work, process-event sources, or X-mode relay polling has an unhealthy model-aware supervision verdict, or if queued wakes are waiting to be drained.
 The drain script calls that guard after emptying the queue, which avoids repeating the queued-wakes warning for records it just consumed while still warning on unhealthy supervision.
 It leads with a prominent bordered tangle banner, while `bin/fm-guard.sh` owns the watcher-down banner and reminder policy so repeated guarded commands stay noisy without reprinting the full banner in the same episode.
+=======
+A pull-based guard (`bin/fm-guard.sh`) warns through supervision tool output if the primary checkout is tangled, if work, process-event sources, or X-mode relay polling needs supervision without a healthy identity-matched watcher, or if queued wakes are waiting to be drained.
+The drain script calls that guard after emptying the queue, which avoids repeating the queued-wakes warning for records it just consumed while still warning on stale watcher liveness.
+It leads with a prominent bordered tangle banner, while `bin/fm-guard.sh` owns the stale-watcher banner/reminder policy so repeated guarded commands stay noisy without reprinting the full watcher-down banner in the same episode.
+>>>>>>> origin/main
 On every verified primary harness, tracked hook integration gives the primary session a push-based backstop: when work, a process-event source, or X-mode relay polling needs supervision and no identity-matched watcher lock with a fresh beacon is live, direct Stop hooks block and passive turn-end hooks force one bounded follow-up.
 The guard covers the main primary and genuinely marked secondmate homes, exempts child crewmate/scout worktrees, is loop-safe per harness, and is documented in [turnend-guard.md](turnend-guard.md).
 
@@ -123,7 +133,11 @@ For capable Herdr sessions, the same watcher replaces its terminal sleep with a 
 The deeper session-start agent-process liveness probe is separate from that busy-state poll: tmux and Herdr have verified classifiers for secondmate recovery, Zellij remains unverified, and Orca and cmux do not support secondmate spawns.
 Herdr is experimental and can be selected explicitly or by runtime auto-detection: Treehouse remains its worktree provider, [`herdr-backend.md`](herdr-backend.md) owns current setup and safety limits, and [`verification/runtime-backends.md`](verification/runtime-backends.md#herdr) owns active empirical evidence.
 Herdr uses one tab per task; [Watching and task containers](herdr-backend.md#watching-and-task-containers) owns launcher-bound workspace placement, the label-only fallback, and recovery scope.
+<<<<<<< HEAD
 Its default-on presentation projection may place one clean new task in a disposable workspace without changing endpoint authority or lifecycle ownership; [Presentation spaces](herdr-backend.md#presentation-spaces) owns that conditional design and its narrow home-local restored-shell cleanup at locked session start.
+=======
+Its optional default-off presentation projection may place one clean new task in a disposable workspace without changing endpoint authority or lifecycle ownership; [Optional presentation spaces](herdr-backend.md#optional-presentation-spaces) owns that conditional design and its narrow home-local restored-shell cleanup at locked session start.
+>>>>>>> origin/main
 Zellij is experimental and selected only explicitly: Treehouse remains its worktree provider, [`zellij-backend.md`](zellij-backend.md) owns current setup and limits, and [`verification/runtime-backends.md`](verification/runtime-backends.md#zellij) owns active empirical evidence.
 Zellij's container shape is simpler than herdr's: one shared `firstmate` session, one tab per task, with no per-home workspace split; visible tab titles are scoped by the active home label plus a short hash of the resolved `FM_ROOT` path.
 Orca is experimental and selected only explicitly: Orca owns both worktree and terminal lifecycle, records `orca_worktree_id=` and `terminal=`, and removes worktrees through `orca worktree rm` only after the usual firstmate teardown checks pass.
@@ -169,13 +183,17 @@ The session-start bootstrap step keeps valid dispatch configuration silent unles
 When the file exists, `fm-spawn.sh` refuses crewmate and scout launches without an explicit harness, so `config/crew-harness` is only automatic when no dispatch profile file is active.
 Secondmate launches are exempt because they resolve the secondmate harness and any optional secondmate model or effort tokens instead.
 Unsupported effort values are still recorded in task meta when passed to `fm-spawn.sh`, but the launch template omits any effort flag that the selected harness does not accept.
-That keeps spawn launch compatible across claude, codex, grok, pi, opencode, and kimi while preserving the requested profile for later audit.
+That keeps spawn launch compatible across claude, codex, grok, pi, opencode, kimi, and omp while preserving the requested profile for later audit.
 
 ## Optional secondmates
 
 `data/secondmates.md` records persistent secondmates with natural-language scopes, project clone lists, and home paths.
 A local route points directly at its home, while a remote route adds an SSH alias and remote Firstmate code root so the entire home and all of its child work stay on that host.
+<<<<<<< HEAD
 Remote placement pins the remote second-mate agent to Herdr while leaving the remote home's worker backend selection independent, and every non-doctor primary-to-remote `fm-on` command runs through the remote account's Firstmate-owned job worker rather than its SSH process or a Herdr pane.
+=======
+Remote placement pins the remote second-mate agent to Herdr while leaving the remote home's worker backend selection independent, and individual workers are never placed remotely by this feature.
+>>>>>>> origin/main
 [`remote-secondmates.md`](remote-secondmates.md) owns current setup, transport, relay, failure, and retirement behavior.
 `fm-home-seed.sh` provisions a local isolated home, clones the listed PR-based projects into it, initializes newly cloned `no-mistakes` projects, copies the charter to `data/charter.md`, and `fm-spawn.sh --secondmate` launches it through the same session-provider and status-file path as any direct report.
 `fm-remote-home-seed.sh` sends a bounded charter and origin manifest through the generic transport so the remote host clones and provisions its own home and projects.

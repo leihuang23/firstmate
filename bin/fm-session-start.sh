@@ -47,9 +47,9 @@
 #                       script points back to the emitted harness supervision
 #                       block and deliberately never arms the watcher itself.
 #
-# On a Pi primary, the supervision-block step also checks whether Pi's two
-# tracked primary extensions are loaded and prints a PI_WATCH_EXTENSION
-# reminder line when one is missing.
+# On a Pi or omp primary, the supervision-block step also checks whether the
+# tracked primary extensions are loaded and prints a PI_WATCH_EXTENSION or
+# OMP_WATCH_EXTENSION reminder line when one is missing.
 #
 # Why lock first: the old documented order (bootstrap, THEN lock) let a
 # SECOND concurrent session run bootstrap's mutating sweeps - converging
@@ -336,6 +336,23 @@ if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ]; then
   if ! pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
     || ! pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
     printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
+<<<<<<< HEAD
+=======
+  fi
+fi
+
+if [ "$PRIMARY_HARNESS" = omp ] && [ "$READ_ONLY" -eq 0 ]; then
+  OMP_EXT="$FM_ROOT/.omp/extensions/fm-primary-omp-watch.ts"
+  OMP_TURNEND_EXT="$FM_ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
+  OMP_WATCH_MARKER="$STATE/.omp-watch-extension-loaded"
+  OMP_TURNEND_MARKER="$STATE/.omp-turnend-extension-loaded"
+  OMP_LOCK="$STATE/.lock"
+  OMP_WATCH_VERSION=$(hash_file "$OMP_EXT" || printf '')
+  OMP_TURNEND_VERSION=$(hash_file "$OMP_TURNEND_EXT" || printf '')
+  if ! pi_extension_loaded "$OMP_WATCH_MARKER" "$OMP_WATCH_VERSION" "$OMP_LOCK" \
+    || ! pi_extension_loaded "$OMP_TURNEND_MARKER" "$OMP_TURNEND_VERSION" "$OMP_LOCK"; then
+    printf 'OMP_WATCH_EXTENSION: not loaded - restart plain omp so %s and %s auto-load (.omp/extensions has no trust gate) for turn-end guard and background wake coverage, or relaunch with -e %s -e %s\n' "$OMP_TURNEND_EXT" "$OMP_EXT" "$OMP_TURNEND_EXT" "$OMP_EXT"
+>>>>>>> origin/main
   fi
 fi
 "$SCRIPT_DIR/fm-supervision-instructions.sh" \
@@ -398,6 +415,15 @@ for status in "$STATE"/*.status; do
   print_status_tail "$status"
 done
 [ "$ORPHAN_STATUS_FOUND" -eq 1 ] || printf '(none)\n'
+
+subsection "Omp watcher delivery failure"
+OMP_DELIVERY_FAILURE="$STATE/.omp-watch-delivery-failed"
+if [ -f "$OMP_DELIVERY_FAILURE" ]; then
+  printf 'present (full marker: %s):\n' "$OMP_DELIVERY_FAILURE"
+  tail -n "$STATUS_TAIL" "$OMP_DELIVERY_FAILURE"
+else
+  printf '(none)\n'
+fi
 
 subsection "AFK"
 if [ -e "$STATE/.afk" ]; then
