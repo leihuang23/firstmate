@@ -18,15 +18,12 @@
 #      config/startup-memory-budget, and config/trace-context -
 #      down into each secondmate home's config/, so the secondmate's OWN crewmates,
 #      dispatch profiles, backlog backend, runtime-backend default, Herdr
-<<<<<<< HEAD
 #      presentation choice, startup-memory budget, and trace context inherit the
 #      primary's settings. config/herdr-presentation-spaces is default-ON, so an
 #      absent primary file and an absent destination file both mean on and the
 #      generic absence mirror already converges that item correctly.
-=======
 #      presentation opt-in, startup-memory budget, and trace context inherit the
 #      primary's settings.
->>>>>>> origin/main
 #      It is primary-authoritative
 #      (re-pushed at secondmate spawn, on the bootstrap secondmate sweep, and by
 #      config push).
@@ -1340,7 +1337,6 @@ test_backend_inheritance_present_and_absent() {
   assert_contains "$(cat "$instruction")" $'-----BEGIN config/backend-----\nABSENT\n-----END config/backend-----' \
     "backend absence reread must use ABSENT token"
   pass "B12b backend inheritance: present values and primary absence converge exactly"
-<<<<<<< HEAD
 }
 
 # config/herdr-presentation-spaces is default-ON, so this item's convergence is
@@ -1390,8 +1386,6 @@ test_presentation_inheritance_default_on_and_opt_out() {
   verdict=$(sm_presentation_verdict "$w/sm/config")
   [ "$verdict" = on ] || fail "a legacy primary opt-in file left the secondmate projection $verdict"
   pass "B12c presentation inheritance: the primary default converges on, and only an explicit opt-out propagates off"
-=======
->>>>>>> origin/main
 }
 
 test_bootstrap_sweep_surfaces_config_propagation_failure() {
@@ -2486,10 +2480,7 @@ test_bootstrap_sweep_propagates_when_tracked_current
 test_bootstrap_sweep_defers_dispatch_on_stale_unignored_home
 test_bootstrap_sweep_materializes_and_inherits_memory_default
 test_backend_inheritance_present_and_absent
-<<<<<<< HEAD
 test_presentation_inheritance_default_on_and_opt_out
-=======
->>>>>>> origin/main
 test_bootstrap_sweep_surfaces_config_propagation_failure
 test_bootstrap_rereads_after_partial_propagation
 test_config_push_propagates_reports_without_ff_or_nudge

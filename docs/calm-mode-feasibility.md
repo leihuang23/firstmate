@@ -18,7 +18,6 @@ The inspected Pi CHANGELOG shows no relevant presentation API introduced at eith
 The exported classes used by the adapters (`AssistantMessageComponent` and `InteractiveMode`) are undocumented internals with no stated version guarantee.
 `tests/fm-calm-pi-extension.test.sh` records the installed Pi version as evidence without gating on it and covers both newer synthetic versions and an unavailable adapter seam.
 
-<<<<<<< HEAD
 ### Built-in tool override constraints
 
 [`calm.md`](calm.md#pi-compatibility) owns the current user-facing collision behavior and limitation.
@@ -31,8 +30,6 @@ It is also usable for reliable collision detection only after extension binding,
 Deferring registration to `session_start` is not an equivalent path: Pi constructs restored tool rows from an earlier tool-registry snapshot during reload, new-session, fork, and session switching, so those rows retain the definition captured before `session_start`.
 `tests/fm-calm-pi-extension.test.sh` covers the resulting split contract: no load-time claims while Calm is off, synchronous claims while it is already on, collision-checked first activation with a warning, preservation of a contested tool's execution, and the non-retroactive bound for rows rendered before first activation.
 
-=======
->>>>>>> origin/main
 ## Pi 0.81.1 end-to-end reproduction
 
 The Pi version installed at the time was verified on 2026-07-22.

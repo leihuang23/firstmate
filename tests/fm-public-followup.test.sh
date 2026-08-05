@@ -618,11 +618,8 @@ test_secondmate_teardown_requires_parent_binding() {
   fm_write_meta "$child/state/work-child.meta" \
     "window=firstmate:fm-work-child" "endpoint_task_id=work-child" \
     "worktree=$child" "project=$child" "kind=ship" "mode=local-only"
-<<<<<<< HEAD
   assert_absent "$child/.fm-secondmate-parent" \
     "the legacy env-only binding case must not gain a durable parent record"
-=======
->>>>>>> origin/main
 
   PATH="$child/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$child" \
     FM_STATE_OVERRIDE="$child/state" FM_DATA_OVERRIDE="$child/data" \
@@ -643,7 +640,6 @@ test_secondmate_teardown_requires_parent_binding() {
   pass "marked secondmate teardown resolves its parent and fails closed when unavailable"
 }
 
-<<<<<<< HEAD
 # The three tests below exercise the durable .fm-secondmate-parent record a real
 # bin/fm-home-seed.sh seed now writes next to .fm-secondmate-home (fm-remote-sm-
 # cleanup-parent-binding-s1 report, section 7). Before this record existed, the
@@ -896,8 +892,6 @@ test_secondmate_teardown_rejects_unsafe_durable_parent_records() {
   pass "unsafe durable parent records fail closed before cleanup"
 }
 
-=======
->>>>>>> origin/main
 test_relay_disabled_unmarked_teardown_skips_public_path() {
   local home tasks_log out rc
   home=$(make_home teardown-disabled-unmarked relay-off)
@@ -1287,15 +1281,12 @@ test_interrupted_delivery_refuses_to_repost
 test_outward_delivery_stays_with_the_owning_home
 test_delivery_requires_registration_before_posting
 test_secondmate_teardown_requires_parent_binding
-<<<<<<< HEAD
 test_local_secondmate_seed_publishes_parent_before_identity
 test_secondmate_teardown_resolves_parent_from_durable_record_when_env_lost
 test_secondmate_teardown_durable_record_missing_parent_registration_still_refuses
 test_secondmate_teardown_durable_record_with_unknown_field_succeeds
 test_secondmate_teardown_rejects_conflicting_live_and_durable_parent_bindings
 test_secondmate_teardown_rejects_unsafe_durable_parent_records
-=======
->>>>>>> origin/main
 test_relay_disabled_unmarked_teardown_skips_public_path
 test_relay_disabled_parent_allows_marked_child_teardown
 test_secondmate_parent_binding_matches_literal_id

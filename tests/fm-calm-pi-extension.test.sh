@@ -354,7 +354,6 @@ JS
   pass "missing Pi presentation class exports reach the independent adapter degradation path"
 }
 
-<<<<<<< HEAD
 test_builtin_gate_load_time() {
   local fixture out output_file status
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -657,8 +656,6 @@ JS
   pass "Calm's first same-session /calm activation claims every uncontested built-in, leaves a foreign bash tool fully intact and callable, warns prominently and logs the contested name, and only rows constructed before that activation - the documented bound - fail to retroactively collapse"
 }
 
-=======
->>>>>>> origin/main
 test_rendering_and_session_lifecycle() {
   local fixture out output_file status version
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -2534,12 +2531,9 @@ const pi = {
   },
   registerEntryRenderer() {},
   registerTool() {},
-<<<<<<< HEAD
   getAllTools() {
     return [];
   },
-=======
->>>>>>> origin/main
   appendEntry: (...args) => sessionWrites.push(["appendEntry", ...args]),
   sendMessage: (...args) => sessionWrites.push(["sendMessage", ...args]),
   sendUserMessage: (...args) => sessionWrites.push(["sendUserMessage", ...args]),
@@ -2583,10 +2577,7 @@ const ui = {
   setHiddenThinkingLabel() {},
   setStatus() {},
   setToolsExpanded() {},
-<<<<<<< HEAD
   notify() {},
-=======
->>>>>>> origin/main
   theme,
 };
 const ctx = { ui };
@@ -3077,7 +3068,6 @@ JSON
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
   active_screen_wait=0
   while [ "$active_screen_wait" -lt 120 ]; do
-<<<<<<< HEAD
     # Include scrollback: the built-in tool rows this documented bound keeps visible
     # (see below) lengthen the transcript enough to push earlier genuine content, such
     # as the original user prompt, above the plain viewport.
@@ -3090,13 +3080,11 @@ JSON
     # tool row at a definition registered later, so CALM_E2E_OUTPUT and friends stay
     # on screen through this whole redraw rather than disappearing with it.
     if ! grep -Fq "Thinking..." "$hidden_snapshot" &&
-=======
     tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" >"$hidden_snapshot"
     # Wait for the redraw this block actually asserts: hidden rows gone AND the
     # retained genuine rows back on screen. Breaking on the hidden rows alone can
     # observe a half-redrawn transcript.
     if ! grep -Fq "CALM_E2E_OUTPUT" "$hidden_snapshot" &&
->>>>>>> origin/main
       ! grep -Fq "/calm" "$hidden_snapshot" &&
       grep -Fq "FIRSTMATE WATCHER WAKE: can you explain this phrase?" "$hidden_snapshot" &&
       grep -Fq "The deterministic tool example is complete." "$hidden_snapshot"; then
@@ -3662,11 +3650,8 @@ test_home_resolution
 test_pi_compat_no_upper_bound
 test_pi_compat_degraded_adapter
 test_pi_compat_missing_adapter_exports
-<<<<<<< HEAD
 test_builtin_gate_load_time
 test_calm_activation_collision_and_regression_bound
-=======
->>>>>>> origin/main
 test_rendering_and_session_lifecycle
 test_operational_followup_turn_e2e
 test_hidden_block_geometry_e2e

@@ -24,30 +24,21 @@ FM_REMOTE_READINESS_OUT=
 fm_remote_readiness_ensure() { # <bin-dir> <secondmate-id>
   local bin_dir=$1 id=$2 out rc
 
-<<<<<<< HEAD
   out=$("$bin_dir/fm-on.sh" "$id" fm-remote-doctor.sh < /dev/null 2>&1)
-=======
   out=$("$bin_dir/fm-on.sh" "$id" fm-remote-doctor.sh 2>&1)
->>>>>>> origin/main
   rc=$?
   FM_REMOTE_READINESS_OUT=$out
   [ "$rc" -ne 0 ] || return 0
   [ "$rc" -ne 255 ] || return 255
 
-<<<<<<< HEAD
   out=$("$bin_dir/fm-on.sh" "$id" fm-remote-doctor.sh --fix < /dev/null 2>&1)
-=======
   out=$("$bin_dir/fm-on.sh" "$id" fm-remote-doctor.sh --fix 2>&1)
->>>>>>> origin/main
   rc=$?
   FM_REMOTE_READINESS_OUT=$out
   [ "$rc" -ne 255 ] || return 255
 
-<<<<<<< HEAD
   out=$("$bin_dir/fm-on.sh" "$id" fm-remote-doctor.sh < /dev/null 2>&1)
-=======
   out=$("$bin_dir/fm-on.sh" "$id" fm-remote-doctor.sh 2>&1)
->>>>>>> origin/main
   rc=$?
   FM_REMOTE_READINESS_OUT=$out
   [ "$rc" -ne 255 ] || return 255

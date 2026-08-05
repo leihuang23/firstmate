@@ -358,11 +358,8 @@ SH
   cat > "$fakebin/quota-axi" <<'SH'
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
-<<<<<<< HEAD
   printf '%s\n' 'quota-axi 0.1.17 (fake)'
-=======
   printf '%s\n' 'quota-axi 0.1.16 (fake)'
->>>>>>> origin/main
 fi
 exit 0
 SH

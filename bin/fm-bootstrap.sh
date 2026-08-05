@@ -58,12 +58,10 @@
 #          is asked to upgrade rather than silently running an older tool.
 #          tasks-axi feature probes remain a separate defense-in-depth check.
 #          tasks-axi and quota-axi are required bootstrap tools (same class as
-<<<<<<< HEAD
 #          lavish-axi). A compatible tasks-axi default backend is silent.
 #          quota-axi is required for the agent-owned dispatch-profile array
 #          procedure in AGENTS.md section 4 and
 #          .agents/skills/quota-array-dispatch/SKILL.md.
-=======
 #          lavish-axi). tasks-axi is also version and feature gated (0.1.1+
 #          with update --archive-body and mv [<id>...]); an installed but
 #          incompatible build reports MISSING like no-mistakes. A compatible
@@ -73,7 +71,6 @@
 #          gated by fm-quota-axi-lib.sh, which owns that floor and its rationale.
 #          An older build reports MISSING like no-mistakes rather than passing
 #          silently while emitting auth semantics dispatch cannot scope.
->>>>>>> origin/main
 #          On a primary home, the locked mutable path materializes the visible
 #          default config/startup-memory-budget=7500 when absent. It never
 #          guesses at malformed or unsafe existing files, and secondmate homes
@@ -471,11 +468,8 @@ secondmate_sync() {
     fi
     nudge_needed=0
     converged=1
-<<<<<<< HEAD
     if sync_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh sync "$id" < /dev/null 2>&1); then
-=======
     if sync_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh sync "$id" 2>&1); then
->>>>>>> origin/main
       case "$sync_out" in synced:*) nudge_needed=1 ;; esac
     else
       echo "SECONDMATE_SYNC: secondmate $id: skipped: remote tracked-file sync failed on $remote_host: $(first_line "$sync_out")"
@@ -543,11 +537,8 @@ secondmate_liveness_sweep() {
         echo "SECONDMATE_LIVENESS: secondmate $id: skipped: remote readiness failed on $remote_host: $readiness_reason"
         continue
       fi
-<<<<<<< HEAD
       if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
-=======
       if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" 2>/dev/null); then
->>>>>>> origin/main
         remote_rc=0
       else
         remote_rc=$?
@@ -563,11 +554,8 @@ secondmate_liveness_sweep() {
       agent_state=$(printf '%s\n' "$out" | tail -1)
       case "$agent_state" in
         alive)
-<<<<<<< HEAD
           if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
-=======
           if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" 2>/dev/null); then
->>>>>>> origin/main
             remote_rc=0
           else
             remote_rc=$?
@@ -607,11 +595,8 @@ secondmate_liveness_sweep() {
     [ -n "$target" ] || target="$window"
     agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
     case "$harness" in
-<<<<<<< HEAD
       claude|codex|opencode|pi|pi-signed|grok|kimi) ;;
-=======
       claude|codex|opencode|pi|pi-signed|grok|kimi|omp) ;;
->>>>>>> origin/main
       *)
         case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
         ;;
@@ -718,7 +703,6 @@ if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
 fi
 TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
 NO_MISTAKES_MIN=1.31.2
-<<<<<<< HEAD
 # AXI-FAMILY FLOOR POLICY. Every axi-family floor is the CURRENT LATEST published
 # version of that tool, captain-bumped periodically to keep the whole fleet on the
 # newest axi tools. It is NOT the minimum feature-introduced version. These floors
@@ -728,8 +712,6 @@ NO_MISTAKES_MIN=1.31.2
 # of its floor.
 GH_AXI_MIN=0.1.29
 LAVISH_AXI_MIN=0.1.45
-=======
->>>>>>> origin/main
 
 treehouse_supports_lease() {
   treehouse get --help 2>&1 | grep -Eq '(^|[^[:alnum:]_-])--lease([^[:alnum:]_-]|$)'
@@ -928,22 +910,16 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
-<<<<<<< HEAD
     def verified($h): ["claude","codex","opencode","pi","pi-signed","grok","kimi"] | index($h);
-=======
     def verified($h): ["claude","codex","opencode","pi","pi-signed","grok","kimi","omp"] | index($h);
->>>>>>> origin/main
     def effort_ok($h; $e):
       if $e == null then true
       elif ($e | type) != "string" then false
       elif $h == "claude" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "codex" then (["low","medium","high","xhigh"] | index($e))
       elif $h == "grok" then (["low","medium","high"] | index($e))
-<<<<<<< HEAD
       elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
-=======
       elif $h == "pi" or $h == "pi-signed" or $h == "omp" then (["low","medium","high","xhigh","max"] | index($e))
->>>>>>> origin/main
       elif $h == "opencode" or $h == "kimi" then false
       else true
       end;
@@ -1077,15 +1053,12 @@ fi
 if command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then
   echo "MISSING: no-mistakes (install: $(install_cmd no-mistakes))"
 fi
-<<<<<<< HEAD
 if command -v gh-axi >/dev/null 2>&1 && ! tool_version_at_least gh-axi "$GH_AXI_MIN"; then
   echo "MISSING: gh-axi (install: $(install_cmd gh-axi))"
 fi
 if command -v lavish-axi >/dev/null 2>&1 && ! tool_version_at_least lavish-axi "$LAVISH_AXI_MIN"; then
   echo "MISSING: lavish-axi (install: $(install_cmd lavish-axi))"
 fi
-=======
->>>>>>> origin/main
 if command -v quota-axi >/dev/null 2>&1 && ! fm_quota_axi_compatible; then
   echo "MISSING: quota-axi (install: $(install_cmd quota-axi))"
 fi

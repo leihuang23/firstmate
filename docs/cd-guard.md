@@ -81,10 +81,7 @@ It does not permit `cd /home/project`, because an absolute-path `cd` remains a p
 - Grok sends stdin JSON at `.toolInput.command`.
 - OpenCode sends the exact command string through `--command <exact string>`.
 - Pi and pi-signed send the exact command string through `--command <exact string>`.
-<<<<<<< HEAD
-=======
 - Omp sends the exact command string through `--command <exact string>` and returns `{block: true, reason}` only when the checker exits 2.
->>>>>>> origin/main
 
 Processing order is cheapest-first: a strict-superset prefilter, then the primary-checkout scope, then the Node policy owner.
 The prefilter removes ordinary single quotes, double quotes, backslashes, carriage returns, and newlines before fast-allowing any command that carries no `cd`, `pushd`, or `popd` substring and no quoting-decoder marker (`$'` ANSI-C or `$"` locale), so quoted or escaped command-word fragments delegate to the policy while most commands never pay for the git scoping calls or the Node process.

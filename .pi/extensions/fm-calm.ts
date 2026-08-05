@@ -93,7 +93,6 @@ const extensionFile = fileURLToPath(import.meta.url);
 const extensionDir = dirname(extensionFile);
 const root = resolve(extensionDir, "../..");
 
-<<<<<<< HEAD
 // Resolves symlinks before comparing tool-ownership identity below: sourceInfo.path
 // values come from independent path-resolution code paths (this module's own
 // import.meta.url vs. Pi's extension loader), and macOS alone symlinks /tmp and /var
@@ -109,8 +108,6 @@ const realpathOrSelf = (path: string): string => {
 };
 const extensionRealFile = realpathOrSelf(extensionFile);
 
-=======
->>>>>>> origin/main
 // Each presentation adapter probes the exact Pi API it patches. If a future Pi removes
 // that API, only the affected adapter degrades; the rest of Calm keeps working.
 function installCalmPresentationAdapter(name: string, install: () => void): void {

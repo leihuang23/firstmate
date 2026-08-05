@@ -15,16 +15,12 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found (the herdr adapter p
 TMP_ROOT=$(fm_test_tmproot fm-remote-doctor)
 LABEL=dev.firstmate.herdr.fm-remote
 INTERACTIVE_LABEL=dev.firstmate.herdr
-<<<<<<< HEAD
 mkdir -p "$TMP_ROOT"
 TMP_ROOT=$(cd "$TMP_ROOT" && pwd -P)
 JOB_LABEL=dev.firstmate.remote-job
 CASE_N=0
 DOCTOR_WORKER_PID=
 trap 'if [ -n "$DOCTOR_WORKER_PID" ]; then kill "$DOCTOR_WORKER_PID" 2>/dev/null || true; fi; fm_test_cleanup || true' EXIT
-=======
-CASE_N=0
->>>>>>> origin/main
 
 # A fixture must be able to present a host with NO herdr, so the doctor never
 # sees the runner's own PATH. Only the two required tools are re-exposed, by
@@ -41,31 +37,22 @@ BASE_PATH="$TOOLS:/usr/bin:/bin:/usr/sbin:/sbin"
 # fake launchctl report an existing Aqua login session.
 new_case() {
   local platform=$1 want_herdr=${2:-with-herdr} want_gui=${3:-gui}
-<<<<<<< HEAD
   unset CASE_REMOTE_JOB_ACTIVE
   unset CASE_PLATFORM_OVERRIDE
-=======
->>>>>>> origin/main
   CASE_N=$((CASE_N + 1))
   CASE_DIR="$TMP_ROOT/case$CASE_N"
   CASE_BIN="$CASE_DIR/bin"
   CASE_HOME="$CASE_DIR/home"
-<<<<<<< HEAD
   CASE_PROJECT_HOME="$CASE_DIR/project-home"
-=======
->>>>>>> origin/main
   CASE_STATE="$CASE_DIR/state"
   CASE_LAUNCHCTL_LOG="$CASE_STATE/launchctl.log"
   CASE_FORBIDDEN_LOG="$CASE_STATE/forbidden.log"
   CASE_HERDR_RUNNING="$CASE_STATE/herdr.running"
   CASE_PLIST="$CASE_HOME/Library/LaunchAgents/$LABEL.plist"
   CASE_INTERACTIVE_PLIST="$CASE_HOME/Library/LaunchAgents/$INTERACTIVE_LABEL.plist"
-<<<<<<< HEAD
   CASE_JOB_PLIST="$CASE_HOME/Library/LaunchAgents/$JOB_LABEL.plist"
   mkdir -p "$CASE_BIN" "$CASE_HOME" "$CASE_PROJECT_HOME" "$CASE_STATE"
-=======
   mkdir -p "$CASE_BIN" "$CASE_HOME" "$CASE_STATE"
->>>>>>> origin/main
   printf 'false\n' > "$CASE_HERDR_RUNNING"
   : > "$CASE_LAUNCHCTL_LOG"
   : > "$CASE_FORBIDDEN_LOG"
@@ -81,31 +68,22 @@ SH
 set -u
 printf '%s\n' "$*" >> "$FM_FAKE_LAUNCHCTL_LOG"
 domain=${2:-}
-<<<<<<< HEAD
 label=${domain##*/}
 loaded="$FM_FAKE_STATE/loaded-$label"
-=======
->>>>>>> origin/main
 case "${1:-}" in
   print)
     case "$domain" in
       */dev.firstmate.herdr.fm-remote)
-<<<<<<< HEAD
         [ -f "$loaded" ] || exit 113
         cat "$loaded"
-=======
         [ -f "$FM_FAKE_STATE/loaded-contract" ] || exit 113
         cat "$FM_FAKE_STATE/loaded-contract"
->>>>>>> origin/main
         ;;
       */dev.firstmate.herdr)
         [ -f "$FM_FAKE_STATE/interactive-loaded" ] || exit 113
         printf 'interactive default job\n'
         ;;
-<<<<<<< HEAD
       */*/*) [ -f "$loaded" ] || exit 113; cat "$loaded" ;;
-=======
->>>>>>> origin/main
       *) [ -f "$FM_FAKE_STATE/gui-session" ] || exit 113 ;;
     esac
     exit 0
@@ -113,21 +91,17 @@ case "${1:-}" in
   bootout)
     [ ! -f "$FM_FAKE_STATE/bootout-fail" ] || { printf 'Boot-out failed: operation not permitted\n' >&2; exit 6; }
     case "$domain" in
-<<<<<<< HEAD
       */dev.firstmate.herdr.fm-remote) rm -f "$loaded" ;;
       */dev.firstmate.herdr) rm -f "$FM_FAKE_STATE/interactive-loaded" ;;
       *) rm -f "$loaded" ;;
-=======
       */dev.firstmate.herdr.fm-remote) rm -f "$FM_FAKE_STATE/loaded-contract" ;;
       */dev.firstmate.herdr) rm -f "$FM_FAKE_STATE/interactive-loaded" ;;
->>>>>>> origin/main
     esac
     exit 0
     ;;
   bootstrap)
     # launchd refuses a gui/<uid> domain that has no login session.
     [ -f "$FM_FAKE_STATE/gui-session" ] || { printf 'Bootstrap failed: 5: Input/output error\n' >&2; exit 5; }
-<<<<<<< HEAD
     [ ! -f "$loaded" ] || { printf 'Bootstrap failed: service already loaded\n' >&2; exit 5; }
     plist=${3:-}
     label=${plist##*/}
@@ -144,10 +118,8 @@ EOF
         ;;
       *)
         cat > "$loaded" <<EOF
-=======
     [ ! -f "$FM_FAKE_STATE/loaded-contract" ] || { printf 'Bootstrap failed: service already loaded\n' >&2; exit 5; }
     cat > "$FM_FAKE_STATE/loaded-contract" <<EOF
->>>>>>> origin/main
 path = $FM_FAKE_PLIST
 program = $FM_FAKE_HERDR_BIN
 arguments = {
@@ -160,18 +132,13 @@ stdout path = $FM_FAKE_LAUNCH_AGENT_LOG
 stderr path = $FM_FAKE_LAUNCH_AGENT_LOG
 properties = keepalive | runatload | inferred program
 EOF
-<<<<<<< HEAD
         [ -f "$FM_FAKE_STATE/bootstrap-does-not-start" ] || printf 'true\n' > "$FM_FAKE_HERDR_RUNNING"
         ;;
     esac
-=======
-    [ -f "$FM_FAKE_STATE/bootstrap-does-not-start" ] || printf 'true\n' > "$FM_FAKE_HERDR_RUNNING"
->>>>>>> origin/main
     exit 0
     ;;
   kickstart)
     [ ! -f "$FM_FAKE_STATE/kickstart-fail" ] || { printf 'Kickstart failed: service unavailable\n' >&2; exit 6; }
-<<<<<<< HEAD
     case "$label" in
       dev.firstmate.remote-job) : ;;
       *)
@@ -182,13 +149,11 @@ EOF
         fi
         ;;
     esac
-=======
     if [ -f "$FM_FAKE_STATE/kickstart-delay" ]; then
       cp "$FM_FAKE_STATE/kickstart-delay" "$FM_FAKE_STATE/herdr-delay"
     else
       printf 'true\n' > "$FM_FAKE_HERDR_RUNNING"
     fi
->>>>>>> origin/main
     exit 0
     ;;
 esac
@@ -235,7 +200,6 @@ exit 0
 SH
     chmod +x "$CASE_BIN/herdr"
   fi
-<<<<<<< HEAD
   cat > "$CASE_BIN/tasks-axi" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}:${2:-}" in
@@ -253,9 +217,6 @@ SH
 exit 0
 SH
   chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl" "$CASE_BIN/tasks-axi" "$CASE_BIN/treehouse" "$CASE_BIN/claude"
-=======
-  chmod +x "$CASE_BIN/uname" "$CASE_BIN/launchctl"
->>>>>>> origin/main
   cat > "$CASE_BIN/sleep" <<'SH'
 #!/usr/bin/env bash
 exit 0
@@ -269,27 +230,20 @@ doctor() {
   set +e
   DOCTOR_OUT=$(
     HOME="$CASE_HOME" \
-<<<<<<< HEAD
     FM_HOME="$CASE_PROJECT_HOME" \
     PATH="$CASE_HOME/.local/bin:$CASE_BIN:$BASE_PATH" \
-=======
     PATH="$CASE_BIN:$BASE_PATH" \
->>>>>>> origin/main
     FM_FAKE_STATE="$CASE_STATE" \
     FM_FAKE_LAUNCHCTL_LOG="$CASE_LAUNCHCTL_LOG" \
     FM_FAKE_FORBIDDEN_LOG="$CASE_FORBIDDEN_LOG" \
     FM_FAKE_HERDR_RUNNING="$CASE_HERDR_RUNNING" \
     FM_FAKE_HERDR_BIN="$CASE_BIN/herdr" \
     FM_FAKE_PLIST="$CASE_PLIST" \
-<<<<<<< HEAD
     FM_FAKE_JOB_PLIST="$CASE_JOB_PLIST" \
     FM_FAKE_JOB_WORKER="$ROOT/bin/fm-remote-job-worker.sh" \
     FM_FAKE_LAUNCH_AGENT_LOG="$CASE_HOME/Library/Logs/$LABEL.log" \
     FM_REMOTE_JOB_PLATFORM_OVERRIDE="${CASE_PLATFORM_OVERRIDE-}" \
     FM_REMOTE_JOB_ACTIVE="${CASE_REMOTE_JOB_ACTIVE-1}" \
-=======
-    FM_FAKE_LAUNCH_AGENT_LOG="$CASE_HOME/Library/Logs/$LABEL.log" \
->>>>>>> origin/main
     "$ROOT/bin/fm-remote-doctor.sh" "$@" 2>&1
   )
   DOCTOR_RC=$?
@@ -298,11 +252,8 @@ doctor() {
 
 write_loaded_contract() { # <herdr-path> [properties]
   local herdr_bin=$1 properties=${2:-'keepalive | runatload | inferred program'}
-<<<<<<< HEAD
   cat > "$CASE_STATE/loaded-$LABEL" <<EOF
-=======
   cat > "$CASE_STATE/loaded-contract" <<EOF
->>>>>>> origin/main
 path = $CASE_PLIST
 program = $herdr_bin
 arguments = {
@@ -368,15 +319,11 @@ assert_contains "$DOCTOR_OUT" 'check gui-session=ok:' "an existing login session
 assert_contains "$DOCTOR_OUT" 'check launchagent=fixable:' "an absent launch agent was not tagged fixable"
 assert_contains "$DOCTOR_OUT" "$LABEL.plist" "the gap did not name the launch agent path"
 assert_contains "$DOCTOR_OUT" 'check herdr-server=fixable:' "a stopped herdr server was not tagged fixable"
-<<<<<<< HEAD
 assert_contains "$DOCTOR_OUT" 'check remote-job-worker=fixable:' "an absent remote job worker was not tagged fixable"
 assert_contains "$DOCTOR_OUT" 'check remote-job-worker-loaded=fixable:' "an unloaded remote job worker was not tagged fixable"
 assert_contains "$DOCTOR_OUT" 'check remote-job-probe=ok:' "the controlled job-worker probe was not reported"
 assert_absent "$CASE_PLIST" "a read-only doctor run installed a launch agent"
 assert_absent "$CASE_JOB_PLIST" "a read-only doctor run installed a remote job worker"
-=======
-assert_absent "$CASE_PLIST" "a read-only doctor run installed a launch agent"
->>>>>>> origin/main
 [ ! -s "$CASE_LAUNCHCTL_LOG" ] || assert_not_contains "$(cat "$CASE_LAUNCHCTL_LOG")" bootstrap \
   "a read-only doctor run loaded a launch agent"
 pass "an absent launch agent is a fixable gap and the read-only run changes nothing"
@@ -389,25 +336,18 @@ assert_contains "$DOCTOR_OUT" 'check launchagent-scope=ok: LimitLoadToSessionTyp
   "the installed launch agent was not Aqua-scoped"
 assert_contains "$DOCTOR_OUT" 'check launchagent-loaded=ok:' "--fix did not load the launch agent"
 assert_contains "$DOCTOR_OUT" 'check herdr-server=ok:' "--fix did not leave the herdr server running"
-<<<<<<< HEAD
 assert_contains "$DOCTOR_OUT" 'check remote-job-worker=ok:' "--fix did not install the remote job worker contract"
 assert_contains "$DOCTOR_OUT" 'check remote-job-worker-loaded=ok:' "--fix did not load the remote job worker"
 assert_present "$CASE_PLIST" "--fix reported success without writing the plist"
 assert_present "$CASE_JOB_PLIST" "--fix reported success without writing the remote job worker plist"
-=======
-assert_present "$CASE_PLIST" "--fix reported success without writing the plist"
->>>>>>> origin/main
 assert_grep '<string>Aqua</string>' "$CASE_PLIST" "the written plist is not Aqua-scoped"
 assert_grep "<string>$LABEL</string>" "$CASE_PLIST" "the written plist does not carry the Firstmate label"
 assert_grep '<string>server</string>' "$CASE_PLIST" "the written plist does not run a herdr server"
 assert_grep '<string>fm-remote</string>' "$CASE_PLIST" "the written plist does not pin the remote-secondmate session"
 assert_no_grep '<string>default</string>' "$CASE_PLIST" "the written plist pins the interactive default session"
-<<<<<<< HEAD
 assert_grep "<string>$JOB_LABEL</string>" "$CASE_JOB_PLIST" "the worker plist does not carry the Firstmate label"
 assert_grep '<string>Aqua</string>' "$CASE_JOB_PLIST" "the worker plist is not Aqua-scoped"
 assert_grep "$ROOT/bin/fm-remote-job-worker.sh" "$CASE_JOB_PLIST" "the worker plist does not use the configured code root"
-=======
->>>>>>> origin/main
 assert_grep "gui/$(id -u)" "$CASE_LAUNCHCTL_LOG" "the launch agent was not bootstrapped into the GUI domain"
 cmp -s "$CASE_STATE/interactive-before.plist" "$CASE_INTERACTIVE_PLIST" \
   || fail "the fm-remote repair rewrote the interactive default launch agent"
@@ -503,11 +443,8 @@ rm -f "$CASE_STATE/bootout-fail"
 doctor --fix
 expect_code 0 "$DOCTOR_RC" "--fix did not replace the stale loaded launch-agent contract"
 assert_contains "$DOCTOR_OUT" 'check launchagent-loaded=ok:' "the replacement loaded contract was not confirmed"
-<<<<<<< HEAD
 assert_no_grep '/obsolete/bin/herdr' "$CASE_STATE/loaded-$LABEL" "the stale effective program survived replacement"
-=======
 assert_no_grep '/obsolete/bin/herdr' "$CASE_STATE/loaded-contract" "the stale effective program survived replacement"
->>>>>>> origin/main
 pass "a failed reload leaves stale effective launch-agent state unready"
 
 # --- a launch agent that is not Aqua-scoped is repaired in place -------------
@@ -594,7 +531,6 @@ assert_contains "$DOCTOR_OUT" 'check herdr-server=ok:' "the started server was n
 [ ! -s "$CASE_LAUNCHCTL_LOG" ] || fail "the linux path invoked launchctl"
 pass "a non-darwin host skips launch agents and starts its herdr server directly"
 
-<<<<<<< HEAD
 # --- --fix may add only owned wrappers for version-manager tools -------------
 
 new_case Linux with-herdr no-gui
@@ -679,8 +615,6 @@ fi
 DOCTOR_WORKER_PID=
 pass "doctor refreshes stale worker identity before probing tools"
 
-=======
->>>>>>> origin/main
 # --- the entrypoint symlink is recreated when it is missing ------------------
 
 new_case Linux with-herdr no-gui

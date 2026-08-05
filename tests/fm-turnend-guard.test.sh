@@ -1084,8 +1084,6 @@ SH
   chmod +x "$dir/bin/fm-watch-arm.sh"
 }
 
-<<<<<<< HEAD
-=======
 run_hook_omp() {
   local dir=$1 home
   home=$(cd "$dir" && pwd)
@@ -1102,7 +1100,6 @@ test_hook_omp_mode_reblocks_x_mode_without_tasks() {
   pass "fm-turnend-guard --omp: X-mode-only homes block without a live watcher"
 }
 
->>>>>>> origin/main
 # The 2026-07-21 incident regression: after a spent forced continuation the old
 # one-shot loop guard ALLOWED a blind stop (stop_hook_active=true) while the
 # watcher was already dead. In --claude mode the guard must re-block instead.
@@ -1554,8 +1551,6 @@ test_hook_claude_mode_secondmate_reblocks_like_primary() {
   pass "fm-turnend-guard --claude: secondmate home re-blocks unclaimed and allows auto-arm-claimed stops"
 }
 
-<<<<<<< HEAD
-=======
 test_omp_extension_blocks_stop_with_continuation() {
   local ext content
   ext="$ROOT/.omp/extensions/fm-primary-turnend-guard.ts"
@@ -1576,7 +1571,6 @@ test_omp_extension_blocks_stop_with_continuation() {
 }
 
 
->>>>>>> origin/main
 test_predicate_healthy_no_inflight
 test_predicate_unhealthy_no_beacon
 test_predicate_unhealthy_stale_beacon
@@ -1622,10 +1616,7 @@ test_codex_hook_ignores_nested_git_root_guard
 test_opencode_plugin_anchors_guard_to_worktree
 test_pi_extension_injects_once_per_logical_agent_run
 test_pi_extension_retries_after_followup_delivery_failure
-<<<<<<< HEAD
-=======
 test_omp_extension_blocks_stop_with_continuation
->>>>>>> origin/main
 test_hook_claude_mode_reblocks_stop_hook_active_when_unhealthy
 test_hook_claude_mode_reblocks_x_mode_without_tasks
 test_hook_omp_mode_reblocks_x_mode_without_tasks
