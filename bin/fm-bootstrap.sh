@@ -52,7 +52,16 @@
 #          "treehouse get --lease" support.
 #          no-mistakes is also MISSING when its installed version is older than
 #          1.31.2.
+#          The AXI-family floor policy is owned beside GH_AXI_MIN and
+#          LAVISH_AXI_MIN below; the per-tool owners point there. An installed
+#          build below its floor reports MISSING like no-mistakes, so the operator
+#          is asked to upgrade rather than silently running an older tool.
+#          tasks-axi feature probes remain a separate defense-in-depth check.
 #          tasks-axi and quota-axi are required bootstrap tools (same class as
+#          lavish-axi). A compatible tasks-axi default backend is silent.
+#          quota-axi is required for the agent-owned dispatch-profile array
+#          procedure in AGENTS.md section 4 and
+#          .agents/skills/quota-array-dispatch/SKILL.md.
 #          lavish-axi). tasks-axi is also version and feature gated (0.1.1+
 #          with update --archive-body and mv [<id>...]); an installed but
 #          incompatible build reports MISSING like no-mistakes. A compatible
@@ -459,6 +468,7 @@ secondmate_sync() {
     fi
     nudge_needed=0
     converged=1
+    if sync_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh sync "$id" < /dev/null 2>&1); then
     if sync_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh sync "$id" 2>&1); then
       case "$sync_out" in synced:*) nudge_needed=1 ;; esac
     else
@@ -527,6 +537,7 @@ secondmate_liveness_sweep() {
         echo "SECONDMATE_LIVENESS: secondmate $id: skipped: remote readiness failed on $remote_host: $readiness_reason"
         continue
       fi
+      if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" < /dev/null 2>/dev/null); then
       if out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh state "$id" 2>/dev/null); then
         remote_rc=0
       else
@@ -543,6 +554,7 @@ secondmate_liveness_sweep() {
       agent_state=$(printf '%s\n' "$out" | tail -1)
       case "$agent_state" in
         alive)
+          if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" < /dev/null 2>/dev/null); then
           if route_out=$("$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-secondmate-control.sh route "$id" 2>/dev/null); then
             remote_rc=0
           else
@@ -583,6 +595,7 @@ secondmate_liveness_sweep() {
     [ -n "$target" ] || target="$window"
     agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
     case "$harness" in
+      claude|codex|opencode|pi|pi-signed|grok|kimi) ;;
       claude|codex|opencode|pi|pi-signed|grok|kimi|omp) ;;
       *)
         case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
@@ -690,6 +703,15 @@ if ! BACKEND_TOOLS=$(fm_backend_required_tools "$BACKEND"); then
 fi
 TOOLS="$BACKEND_TOOLS $COMMON_TOOLS"
 NO_MISTAKES_MIN=1.31.2
+# AXI-FAMILY FLOOR POLICY. Every axi-family floor is the CURRENT LATEST published
+# version of that tool, captain-bumped periodically to keep the whole fleet on the
+# newest axi tools. It is NOT the minimum feature-introduced version. These floors
+# are expected to drift upward as new versions ship. Never lower a floor to the
+# earliest release that happens to satisfy some depended-on behavior. The
+# tasks-axi feature probes are an independent defense-in-depth concern, not part
+# of its floor.
+GH_AXI_MIN=0.1.29
+LAVISH_AXI_MIN=0.1.45
 
 treehouse_supports_lease() {
   treehouse get --help 2>&1 | grep -Eq '(^|[^[:alnum:]_-])--lease([^[:alnum:]_-]|$)'
@@ -888,6 +910,7 @@ crew_dispatch_validate() {
     return 0
   fi
   err=$(jq -r '
+    def verified($h): ["claude","codex","opencode","pi","pi-signed","grok","kimi"] | index($h);
     def verified($h): ["claude","codex","opencode","pi","pi-signed","grok","kimi","omp"] | index($h);
     def effort_ok($h; $e):
       if $e == null then true
@@ -895,6 +918,7 @@ crew_dispatch_validate() {
       elif $h == "claude" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "codex" then (["low","medium","high","xhigh"] | index($e))
       elif $h == "grok" then (["low","medium","high"] | index($e))
+      elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "pi" or $h == "pi-signed" or $h == "omp" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "opencode" or $h == "kimi" then false
       else true
@@ -1028,6 +1052,12 @@ if fm_backend_list_contains "$TOOLS" treehouse \
 fi
 if command -v no-mistakes >/dev/null 2>&1 && ! tool_version_at_least no-mistakes "$NO_MISTAKES_MIN"; then
   echo "MISSING: no-mistakes (install: $(install_cmd no-mistakes))"
+fi
+if command -v gh-axi >/dev/null 2>&1 && ! tool_version_at_least gh-axi "$GH_AXI_MIN"; then
+  echo "MISSING: gh-axi (install: $(install_cmd gh-axi))"
+fi
+if command -v lavish-axi >/dev/null 2>&1 && ! tool_version_at_least lavish-axi "$LAVISH_AXI_MIN"; then
+  echo "MISSING: lavish-axi (install: $(install_cmd lavish-axi))"
 fi
 if command -v quota-axi >/dev/null 2>&1 && ! fm_quota_axi_compatible; then
   echo "MISSING: quota-axi (install: $(install_cmd quota-axi))"
