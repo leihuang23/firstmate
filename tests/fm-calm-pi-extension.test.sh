@@ -2862,11 +2862,22 @@ test_interactive_terminal_e2e() {
   cp "$WATCH_EXT" "$project/.pi/extensions/fm-primary-pi-watch.ts"
   cp "$ROOT/.pi/extensions/fm-primary-turnend-guard.ts" "$project/.pi/extensions/fm-primary-turnend-guard.ts"
   cp \
+    "$ROOT/bin/fm-sessionstart-run.sh" \
     "$ROOT/bin/fm-sessionstart-nudge.sh" \
     "$ROOT/bin/fm-primary-scope-lib.sh" \
     "$ROOT/bin/fm-gate-refuse-lib.sh" \
     "$ROOT/bin/fm-operational-input.sh" \
     "$project/bin/"
+  # The real digest is out of scope here: this lab is about how Calm RENDERS the
+  # session-open message and whether it keeps its operational provenance, not
+  # about what session start reports. A stub keeps the run tier's real routing
+  # and the extension's real encoding in the path without dragging a whole
+  # fleet home into a rendering test.
+  cat >"$project/bin/fm-session-start.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'CALM_E2E_SESSION_START_DIGEST\n'
+exit 0
+SH
   chmod +x "$project/bin/"*.sh
   cat >"$project/.pi/extensions/fm-calm-e2e-inject.ts" <<'TS'
 import {
@@ -3080,11 +3091,6 @@ JSON
     # tool row at a definition registered later, so CALM_E2E_OUTPUT and friends stay
     # on screen through this whole redraw rather than disappearing with it.
     if ! grep -Fq "Thinking..." "$hidden_snapshot" &&
-    tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" >"$hidden_snapshot"
-    # Wait for the redraw this block actually asserts: hidden rows gone AND the
-    # retained genuine rows back on screen. Breaking on the hidden rows alone can
-    # observe a half-redrawn transcript.
-    if ! grep -Fq "CALM_E2E_OUTPUT" "$hidden_snapshot" &&
       ! grep -Fq "/calm" "$hidden_snapshot" &&
       grep -Fq "FIRSTMATE WATCHER WAKE: can you explain this phrase?" "$hidden_snapshot" &&
       grep -Fq "The deterministic tool example is complete." "$hidden_snapshot"; then

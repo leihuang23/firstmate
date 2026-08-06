@@ -16,7 +16,6 @@ Configure an SSH alias in the primary account's normal OpenSSH configuration.
 Use ordinary public-key authentication, strict host-key verification, and a dedicated remote account where practical.
 Do not enable agent forwarding for Firstmate.
 `fm-on.sh` also disables agent forwarding, forwarding setup, and configured `SendEnv` patterns on every call, and arms bounded SSH dead-peer detection so a vanished host (a reboot, a dropped link) fails within a bounded window instead of hanging indefinitely; its [script header](../bin/fm-on.sh) owns the keepalive defaults and environment overrides.
-`fm-on.sh` also disables agent forwarding, forwarding setup, and configured `SendEnv` patterns on every call.
 
 Clone Firstmate on the remote host at an absolute code-root path.
 Expose that clone's fixed entrypoint on the account's non-interactive SSH `PATH`, for example:
@@ -33,10 +32,10 @@ The entrypoint authorizes that bootstrap with normal git tracking when git resol
 After setup, every other command verifies Firstmate's account-owned remote job worker, stages the encoded argv and stdin bytes, waits for its result, and relays stdout, stderr, and the exit status separately.
 On macOS the worker is `dev.firstmate.remote-job`, an Aqua-scoped LaunchAgent at `~/Library/LaunchAgents/dev.firstmate.remote-job.plist` with logs under `~/Library/Logs/`.
 After that bootstrap every non-doctor `fm-on.sh` target runs through that worker in the remote account's GUI session, never in the SSH process or a Herdr pane.
+The worker runs one staged job at a time and preempts a running reply long-poll as soon as any command other than another reply long-poll is queued, so interactive commands and startup checks are never serialized behind a poll window.
+`bin/fm-remote-job-lib.sh` owns that preemption contract, and a preempted poll is indistinguishable from one whose wait window closed with no data, so the re-armed poll loses nothing.
 Linux uses the same queue and worker protocol without the Aqua-session requirement.
 The remote account must provide the required toolchain, the selected worker runtime, the selected session backend, and credentials that work on that host.
-It never accepts a shell command string and starts the selected script with a minimal environment containing only fixed `PATH`, `HOME`, `FM_HOME`, and `FM_ROOT_OVERRIDE` values.
-The remote account must provide Firstmate's universal toolchain, the selected worker runtime, the selected session backend, and credentials that work on that host.
 Project origin URLs recorded by the primary must be reachable from the remote account because projects are cloned on that host rather than copied from the primary.
 
 ## Non-interactive tool contract
@@ -57,19 +56,6 @@ The filesystem discovery normally finds tools installed by nvm, asdf, or mise wi
 When a required tool remains discoverable only through one of those managers, `fm-remote-doctor.sh --fix` may create a Firstmate-owned wrapper in `~/.local/bin` that executes its selected absolute target.
 It never overwrites a wrapper or other file it does not own, and it never installs a package.
 An operator can use the same wrapper shape when a tool needs a manual selection:
-`bin/fm-remote-entrypoint.sh` is the single owner of the `PATH` its children receive and composes it in this order:
-
-1. `<remote-root>/bin`.
-2. The account's `~/.local/bin`, always included so an account can add tools without changing this contract.
-3. Each of `~/.nix-profile/bin`, `/etc/profiles/per-user/<account>/bin`, `/run/current-system/sw/bin`, `/opt/homebrew/bin`, and `/usr/local/bin`, in that order, and only when the directory exists on the host.
-4. The system tail `/usr/bin:/bin:/usr/sbin:/sbin`.
-
-Repeated directories are collapsed to their first position, so the order above is exactly what a remote command sees.
-The entrypoint resolves `git` from the operator directories in steps 2 through 4 for tracked-command authorization, then prepends `<remote-root>/bin` only for the authorized child.
-A checkout-local `bin/git` therefore cannot authorize an untracked command, and a host with no operator `git` receives an install-or-wrapper diagnostic before command execution.
-
-A tool that only exists inside a version manager - nvm, asdf, or mise - never resolves under that contract, because those managers publish their shims through shell initialization.
-The supported escape hatch is a wrapper in `~/.local/bin` rather than special-casing a version manager inside the entrypoint:
 
 ```sh
 mkdir -p ~/.local/bin
@@ -97,7 +83,6 @@ bin/fm-on.sh <secondmate-id|ssh-alias> fm-remote-doctor.sh
 
 That run is read-only.
 It prints the exact `PATH` its own entrypoint launch produced, executes its required-tool probe through the installed worker when one is available, reports where each required and optional tool resolved, then reports one line per readiness check.
-It prints the exact `PATH` its own entrypoint launch produced, reports where each required and optional tool resolved, then reports one line per readiness check.
 Each gap is tagged `fixable:` when `--fix` can close it or `human:` when only a person at that machine can, and every gap is followed by an `action:` line naming the exact step.
 Any remaining gap exits non-zero.
 The script's own header owns the full line protocol.
@@ -112,8 +97,6 @@ Over the plain SSH doctor bootstrap, it writes and reloads the Firstmate-owned `
 It starts the same workers directly on Linux, recreates the `~/.local/bin/fm-remote-entrypoint.sh` symlink when it is absent, and creates only Firstmate-owned required-tool wrappers that it can prove resolve to a version-manager target, stopping after one harness satisfies the at-least-one requirement.
 It never installs packages or overwrites a non-Firstmate file at a reserved wrapper path.
 The dedicated Herdr launch agent owns only the remote-secondmate `fm-remote` server and does not inspect, rewrite, start, stop, or require the user's interactive `default` session or its `dev.firstmate.herdr` launch agent.
-It writes and reloads the Firstmate-owned launch agent `dev.firstmate.herdr.fm-remote` at `~/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist`, scoped with `LimitLoadToSessionType=Aqua` so it belongs to the GUI login session, bootstraps and starts the `fm-remote` server in `gui/<uid>`, starts that server directly on a host where no launch agent applies, and recreates the `~/.local/bin/fm-remote-entrypoint.sh` symlink when it is absent.
-The dedicated launch agent owns only the remote-secondmate server and does not inspect, rewrite, start, stop, or require the user's interactive `default` session or its `dev.firstmate.herdr` launch agent.
 It re-derives every check from the host afterwards, so what it prints is the state after the repair rather than the intent of one.
 
 These steps are never automated and are always reported rather than silently attempted, because SSH cannot create a GUI session from nothing:
@@ -122,7 +105,6 @@ These steps are never automated and are always reported rather than silently att
 - FileVault, which holds a reboot at pre-boot authentication before any login session exists.
 - Installing any missing required tool that no safe wrapper can resolve.
 - The required remote tool set is `git`, `jq`, `herdr`, compatible `tasks-axi`, `treehouse`, and at least one of `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, or `kimi`.
-- Installing herdr from [herdr.dev](https://herdr.dev), and any required tool a wrapper cannot resolve.
 - Each worker runtime's own `/login`, and any keychain password prompt that login needs.
 
 Firstmate never writes an auto-login password, never changes FileVault, and never stores an account password.

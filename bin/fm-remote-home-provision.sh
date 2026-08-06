@@ -13,10 +13,6 @@
 # reply promise, which the subsystem can only carry on the parent's own
 # filesystem, is never mistaken for one this child could hold - and the
 # .fm-secondmate-home marker commits the complete seed last.
-# Manifest schema fm-remote-home-provision.v1 carries a base64 charter and one
-# base64 project record per line. The remote code root is cloned into an absent
-# home, project origins are cloned on this host, the project registry and charter
-# are published, and the .fm-secondmate-home marker commits the seed last.
 # A newly created home is removed on failure. An existing matching seeded home
 # is converged only through guarded ordinary-file updates and new project clones.
 set -eu
@@ -157,7 +153,6 @@ if [ -e "$FM_HOME" ] || [ -L "$FM_HOME" ]; then
   done
   mkdir -p "$TMP/before/data"
   for rel in data/charter.md data/projects.md .fm-secondmate-home .fm-secondmate-parent; do
-  for rel in data/charter.md data/projects.md .fm-secondmate-home; do
     existing="$FM_HOME/$rel"
     if [ -e "$existing" ] || [ -L "$existing" ]; then
       [ -f "$existing" ] && [ ! -L "$existing" ] || die "existing remote home has unsafe owned file: $rel"

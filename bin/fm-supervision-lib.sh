@@ -12,9 +12,6 @@
 # Stop auto-arm model, where the watcher only runs between turns, a fresh beacon
 # with no live watcher is healthy; under persistent-watcher harnesses a live
 # identity-matched watcher is still required. The status fields here retain the
-# bin/fm-guard.sh and bin/fm-turnend-guard.sh use fm_watcher_healthy from
-# bin/fm-wake-lib.sh for their warning and block decisions, so a fresh leftover
-# beacon never counts as a live watcher. The status fields here retain the
 # beacon-age details used in their messages.
 
 # Portable mtime; Linux stat lacks -f, macOS stat lacks -c.

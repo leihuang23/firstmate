@@ -28,11 +28,6 @@ SH
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
   printf '%s\n' 'quota-axi 0.1.17 (fake)'
-  fm_fake_exit0 "$fakebin" node gh-axi chrome-devtools-axi lavish-axi quota-axi
-  cat > "$fakebin/quota-axi" <<'SH'
-#!/usr/bin/env bash
-if [ "${1:-}" = --version ]; then
-  printf '%s\n' 'quota-axi 0.1.16 (fake)'
 fi
 exit 0
 SH
@@ -56,7 +51,6 @@ SH
 #!/usr/bin/env bash
 case "${1:-}:${2:-}" in
   --version:*) printf '%s\n' '0.2.4' ;;
-  --version:*) printf '%s\n' '0.2.3' ;;
   update:--help) printf '%s\n' '--archive-body' ;;
   mv:--help) printf '%s\n' 'usage: tasks-axi mv <id> [<id>...]' ;;
 esac

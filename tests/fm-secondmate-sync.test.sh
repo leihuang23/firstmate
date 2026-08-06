@@ -359,7 +359,6 @@ SH
 #!/usr/bin/env bash
 if [ "${1:-}" = --version ]; then
   printf '%s\n' 'quota-axi 0.1.17 (fake)'
-  printf '%s\n' 'quota-axi 0.1.16 (fake)'
 fi
 exit 0
 SH

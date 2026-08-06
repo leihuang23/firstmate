@@ -220,7 +220,6 @@ fetch_document() { # <id> <remote-relative> <result-var>
   [ ! -L "$destination" ] || return 1
   tmp=$(umask 077; mktemp "$parent/.remote-doc.XXXXXX") || return 1
   if ! "$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-file.sh get "$rel" "$MAX_DOC_BYTES" < /dev/null > "$tmp"; then
-  if ! "$SCRIPT_DIR/fm-on.sh" "$id" fm-remote-file.sh get "$rel" "$MAX_DOC_BYTES" > "$tmp"; then
     rm -f -- "$tmp"
     return 1
   fi

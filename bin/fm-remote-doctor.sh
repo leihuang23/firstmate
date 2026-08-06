@@ -16,20 +16,6 @@
 # over the plain-SSH bootstrap path to inspect and repair that worker. SSH cannot
 # create an Aqua session, so a host with no GUI login is a human gap rather than
 # something --fix attempts to bypass.
-# Run it through fm-on.sh so the fixed remote entrypoint composes and exports
-# the child PATH: this command reports the PATH it inherits instead of
-# recomposing it, so the entrypoint stays the single owner of that ordering and
-# the two can never drift.
-#
-# A remote second mate always runs on the Herdr backend in the dedicated
-# fm-remote session, so readiness is more than tool resolution. herdr must
-# resolve, that server must be reachable, and on macOS the Firstmate-owned
-# launch agent dev.firstmate.herdr.fm-remote at
-# ~/Library/LaunchAgents/dev.firstmate.herdr.fm-remote.plist must exist, carry
-# LimitLoadToSessionType=Aqua, and be loaded into the console user's gui/<uid>
-# domain, so the server belongs to the GUI login session and survives logout and
-# SSH disconnection. SSH cannot create an Aqua session, so a host with no GUI
-# login is reported as a human gap rather than repaired.
 #
 # Line protocol, one fact per line, stable for script consumers:
 #   mode=check|fix
@@ -57,12 +43,6 @@
 # installs packages, creates a login session, writes an auto-login password,
 # changes FileVault, stores an account password, or replaces a non-Firstmate
 # wrapper; those remain reported gaps.
-# --fix is idempotent and closes only automatable gaps: it writes the Aqua
-# launch agent, bootstraps and kickstarts it into gui/<uid> when a login session
-# exists, starts the herdr server where no launch agent applies, and recreates
-# the entrypoint symlink. It never creates a login session, never writes an
-# auto-login password (kcpassword), never changes FileVault, and never stores an
-# account password; those remain reported human gaps.
 set -eu
 
 # Resolve this script's directory with builtins only: a host missing a required
@@ -79,8 +59,6 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(CDPATH='' cd "$SCRIPT_DIR/.." && pwd -P)}"
 REQUIRED_TOOLS=(git jq herdr tasks-axi treehouse)
 HARNESS_TOOLS=(claude codex opencode pi pi-signed grok kimi)
 OPTIONAL_TOOLS=(tmux no-mistakes gh)
-REQUIRED_TOOLS=(git jq)
-OPTIONAL_TOOLS=(tmux treehouse no-mistakes tasks-axi claude codex opencode pi grok kimi)
 LAUNCH_AGENT_LABEL=dev.firstmate.herdr.fm-remote
 # The dedicated remote-secondmate session. The user's interactive Herdr work
 # remains in the separate default session, which this readiness check never
@@ -108,13 +86,6 @@ esac
 [ "$#" -eq 0 ] || usage
 
 PLATFORM=$(fm_remote_job_platform)
-PLATFORM_RAW=$(uname -s 2>/dev/null) || PLATFORM_RAW=
-case "$PLATFORM_RAW" in
-  Darwin) PLATFORM=darwin ;;
-  Linux) PLATFORM=linux ;;
-  '') PLATFORM=unknown ;;
-  *) PLATFORM=$PLATFORM_RAW ;;
-esac
 UID_NUM=$(id -u 2>/dev/null) || UID_NUM=
 
 CHECK_NAMES=()
@@ -162,8 +133,6 @@ herdr_cli_available() {
   herdr_bin=$(command -v herdr 2>/dev/null || true)
   jq_bin=$(command -v jq 2>/dev/null || true)
   [ -n "$herdr_bin" ] && [ -x "$herdr_bin" ] && [ -n "$jq_bin" ] && [ -x "$jq_bin" ]
-herdr_cli_available() {
-  command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1
 }
 
 # The herdr adapter is the single owner of session-scoped herdr invocation and
@@ -484,7 +453,6 @@ fix_remote_job_worker() {
 check_herdr() {
   local resolved
   if resolved=$(command -v herdr 2>/dev/null) && [ -x "$resolved" ]; then
-  if resolved=$(command -v herdr 2>/dev/null); then
     record herdr "ok: $resolved"
     return 0
   fi
@@ -795,15 +763,6 @@ if [ "${FM_REMOTE_JOB_ACTIVE:-}" = 1 ] || ! remote_job_identity_ok; then
 else
   report_required_tools_from_worker
 fi
-MISSING=()
-for tool in "${REQUIRED_TOOLS[@]}"; do
-  if resolved=$(command -v "$tool" 2>/dev/null); then
-    printf 'required %s=%s\n' "$tool" "$resolved"
-  else
-    printf 'required %s=MISSING\n' "$tool"
-    MISSING+=("$tool")
-  fi
-done
 for tool in "${OPTIONAL_TOOLS[@]}"; do
   if resolved=$(command -v "$tool" 2>/dev/null); then
     printf 'optional %s=%s\n' "$tool" "$resolved"
@@ -811,14 +770,6 @@ for tool in "${OPTIONAL_TOOLS[@]}"; do
     printf 'optional %s=absent\n' "$tool"
   fi
 done
-
-run_checks
-if [ "$MODE" = fix ]; then
-  apply_fixes
-  # Re-derive every check from the host itself, so what prints below is the
-  # state after repair rather than the intent of a repair.
-  run_checks
-fi
 
 GAPS=()
 i=0
@@ -837,7 +788,6 @@ if [ "${#MISSING[@]}" -gt 0 ]; then
   printf 'error: required tools do not resolve on the remote runtime PATH: %s\n' "${MISSING[*]}" >&2
   printf 'fix: install each one where it resolves on the path reported above, or put a wrapper script for it in %s/.local/bin, which is always on that PATH.\n' "${HOME:-~}" >&2
   printf 'fix: tools in an unselected nvm version or outside the discovered asdf or mise paths need an absolute wrapper; see docs/remote-secondmates.md for the wrapper recipe.\n' >&2
-  printf 'fix: tools provided by nvm, asdf, or mise never resolve here because no login or interactive shell runs; see docs/remote-secondmates.md for the wrapper recipe.\n' >&2
 fi
 if [ "${#MISSING[@]}" -gt 0 ] || [ "${#GAPS[@]}" -gt 0 ]; then
   NAMES=

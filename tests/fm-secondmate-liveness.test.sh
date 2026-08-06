@@ -217,7 +217,6 @@ fi
 exit 0
 SH
   chmod +x "$fakebin/gh-axi"
-  fm_fake_exit0 "$fakebin" node gh-axi chrome-devtools-axi lavish-axi pi-signed
   cat > "$fakebin/gh" <<'SH'
 #!/usr/bin/env bash
 exit 0

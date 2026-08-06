@@ -52,7 +52,6 @@ new_case() {
   CASE_INTERACTIVE_PLIST="$CASE_HOME/Library/LaunchAgents/$INTERACTIVE_LABEL.plist"
   CASE_JOB_PLIST="$CASE_HOME/Library/LaunchAgents/$JOB_LABEL.plist"
   mkdir -p "$CASE_BIN" "$CASE_HOME" "$CASE_PROJECT_HOME" "$CASE_STATE"
-  mkdir -p "$CASE_BIN" "$CASE_HOME" "$CASE_STATE"
   printf 'false\n' > "$CASE_HERDR_RUNNING"
   : > "$CASE_LAUNCHCTL_LOG"
   : > "$CASE_FORBIDDEN_LOG"
@@ -76,8 +75,6 @@ case "${1:-}" in
       */dev.firstmate.herdr.fm-remote)
         [ -f "$loaded" ] || exit 113
         cat "$loaded"
-        [ -f "$FM_FAKE_STATE/loaded-contract" ] || exit 113
-        cat "$FM_FAKE_STATE/loaded-contract"
         ;;
       */dev.firstmate.herdr)
         [ -f "$FM_FAKE_STATE/interactive-loaded" ] || exit 113
@@ -94,8 +91,6 @@ case "${1:-}" in
       */dev.firstmate.herdr.fm-remote) rm -f "$loaded" ;;
       */dev.firstmate.herdr) rm -f "$FM_FAKE_STATE/interactive-loaded" ;;
       *) rm -f "$loaded" ;;
-      */dev.firstmate.herdr.fm-remote) rm -f "$FM_FAKE_STATE/loaded-contract" ;;
-      */dev.firstmate.herdr) rm -f "$FM_FAKE_STATE/interactive-loaded" ;;
     esac
     exit 0
     ;;
@@ -118,8 +113,6 @@ EOF
         ;;
       *)
         cat > "$loaded" <<EOF
-    [ ! -f "$FM_FAKE_STATE/loaded-contract" ] || { printf 'Bootstrap failed: service already loaded\n' >&2; exit 5; }
-    cat > "$FM_FAKE_STATE/loaded-contract" <<EOF
 path = $FM_FAKE_PLIST
 program = $FM_FAKE_HERDR_BIN
 arguments = {
@@ -149,11 +142,6 @@ EOF
         fi
         ;;
     esac
-    if [ -f "$FM_FAKE_STATE/kickstart-delay" ]; then
-      cp "$FM_FAKE_STATE/kickstart-delay" "$FM_FAKE_STATE/herdr-delay"
-    else
-      printf 'true\n' > "$FM_FAKE_HERDR_RUNNING"
-    fi
     exit 0
     ;;
 esac
@@ -232,7 +220,6 @@ doctor() {
     HOME="$CASE_HOME" \
     FM_HOME="$CASE_PROJECT_HOME" \
     PATH="$CASE_HOME/.local/bin:$CASE_BIN:$BASE_PATH" \
-    PATH="$CASE_BIN:$BASE_PATH" \
     FM_FAKE_STATE="$CASE_STATE" \
     FM_FAKE_LAUNCHCTL_LOG="$CASE_LAUNCHCTL_LOG" \
     FM_FAKE_FORBIDDEN_LOG="$CASE_FORBIDDEN_LOG" \
@@ -253,7 +240,6 @@ doctor() {
 write_loaded_contract() { # <herdr-path> [properties]
   local herdr_bin=$1 properties=${2:-'keepalive | runatload | inferred program'}
   cat > "$CASE_STATE/loaded-$LABEL" <<EOF
-  cat > "$CASE_STATE/loaded-contract" <<EOF
 path = $CASE_PLIST
 program = $herdr_bin
 arguments = {
@@ -444,7 +430,6 @@ doctor --fix
 expect_code 0 "$DOCTOR_RC" "--fix did not replace the stale loaded launch-agent contract"
 assert_contains "$DOCTOR_OUT" 'check launchagent-loaded=ok:' "the replacement loaded contract was not confirmed"
 assert_no_grep '/obsolete/bin/herdr' "$CASE_STATE/loaded-$LABEL" "the stale effective program survived replacement"
-assert_no_grep '/obsolete/bin/herdr' "$CASE_STATE/loaded-contract" "the stale effective program survived replacement"
 pass "a failed reload leaves stale effective launch-agent state unready"
 
 # --- a launch agent that is not Aqua-scoped is repaired in place -------------
