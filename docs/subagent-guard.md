@@ -185,6 +185,7 @@ Applicability turns on one question: does the harness expose built-in delegation
 | Grok | present, exact tokens unconfirmed | Not wired pending live verification. See below. |
 | OpenCode | present, exact tokens unconfirmed | Not wired pending live verification. See below. |
 | Pi | none reported | Not wired pending live verification. See below. |
+| Omp | present (`task` subagent tool, default-enabled) | Wired and live-verified 2026-07-26 on omp 17.1.3: `.omp/extensions/fm-primary-turnend-guard.ts` routes every non-bash `tool_call` name through the checker with `--tool`, and a real `task` call in a primary home was denied with the verbatim `[subagent-dispatch]` message. |
 
 ### Codex, verified not applicable
 

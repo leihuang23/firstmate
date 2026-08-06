@@ -347,6 +347,24 @@ test_bottom_border_cursor_reads_ghost_only_box_as_empty() {
   pass "fm_tmux_composer_state: Grok's bottom-border cursor quirk reads an empty box structurally"
 }
 
+test_omp_bottom_border_content_is_classified() {
+  local dir fb capture out
+  dir="$TMP_ROOT/omp-bottom-content"; mkdir -p "$dir"
+  fb=$(make_fake_tmux "$dir")
+  capture="$dir/styled.txt"
+  printf '╭─ π > ─╮\n╰─     ─╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = empty ] \
+    || fail "an empty omp bottom-border composer should be empty, got '$out'"
+  printf '╭─ π > ─╮\n╰─ go  ─╯\n' > "$capture"
+  out=$(PATH="$fb:$PATH" FM_FAKE_STYLED="$capture" FM_FAKE_CY=1 \
+    fm_tmux_composer_state "fakepane")
+  [ "$out" = pending ] \
+    || fail "typed omp bottom-border content should be pending, got '$out'"
+  pass "fm_tmux_composer_state: omp bottom-border content distinguishes empty from pending"
+}
+
 test_bordered_busy_signatures_are_pending() {
   local dir fb capture out signature
   dir="$TMP_ROOT/bordered-busy-signatures"; mkdir -p "$dir"
@@ -639,6 +657,7 @@ test_real_text_with_trailing_ghost_is_pending
 test_two_row_composer_reads_text_above_empty_cursor_row
 test_wrapped_composer_reads_all_content_rows
 test_bottom_border_cursor_reads_ghost_only_box_as_empty
+test_omp_bottom_border_content_is_classified
 test_bordered_busy_signatures_are_pending
 test_non_bordered_busy_footer_remains_empty
 test_clipped_bordered_box_is_unknown
